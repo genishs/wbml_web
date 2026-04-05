@@ -6,50 +6,49 @@
   <title>Wonder Boy in Monster Land - Web Homage</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
       background: #1a1a2e;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      font-family: 'Courier New', monospace;
-    }
-    h1 {
-      color: #e94560;
-      font-size: 20px;
-      margin-bottom: 8px;
-      text-shadow: 2px 2px 0 #000;
-      letter-spacing: 2px;
     }
     #gameContainer {
-      position: relative;
-      border: 3px solid #e94560;
-      box-shadow: 0 0 20px #e94560aa;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform-origin: center center;
+      border: 2px solid #e94560;
+      box-shadow: 0 0 30px #e94560aa;
     }
     canvas {
       display: block;
       image-rendering: pixelated;
+      image-rendering: crisp-edges;
     }
-    #controls {
-      color: #aaa;
-      font-size: 12px;
-      margin-top: 8px;
-      text-align: center;
-      line-height: 1.8;
-    }
-    #controls span { color: #e94560; }
   </style>
 </head>
 <body>
-  <h1>WONDER BOY IN MONSTER LAND</h1>
   <div id="gameContainer">
     <canvas id="gameCanvas" width="640" height="360"></canvas>
   </div>
-  <div id="controls">
-    <span>←→</span> 이동 &nbsp; <span>Z</span> 점프 &nbsp; <span>X</span> 공격 &nbsp; <span>Enter</span> 확인/시작
-  </div>
 
   <script type="module" src="src/main.js"></script>
+  <script>
+    const GAME_W = 640, GAME_H = 360;
+    const container = document.getElementById('gameContainer');
+
+    function resize() {
+      const scaleX = window.innerWidth  / GAME_W;
+      const scaleY = window.innerHeight / GAME_H;
+      const scale  = Math.min(scaleX, scaleY);
+      container.style.width  = GAME_W + 'px';
+      container.style.height = GAME_H + 'px';
+      container.style.transform =
+        `translate(-50%, -50%) scale(${scale})`;
+    }
+
+    resize();
+    window.addEventListener('resize', resize);
+  </script>
 </body>
 </html>
