@@ -141,32 +141,40 @@ export class Enemy {
       return;
     }
 
-    const frameSet = sprites[this.type] || sprites.slime;
-    const frame = frameSet[this.frame % frameSet.length];
-
     ctx.save();
     ctx.imageSmoothingEnabled = false;
 
-    // Flash white on hit
-    if (this.hitTimer > 0) {
-      ctx.globalAlpha = 0.6;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(px, py, this.w, this.h);
-      ctx.globalAlpha = 1;
-    }
+    const spr = sprites?.enemies?.[this.type];
 
-    // Flip: sprites face LEFT by default; flip when moving right
-    if (this.vx > 0) {
-      ctx.translate(px + this.w, py);
-      ctx.scale(-1, 1);
-      ctx.drawImage(frame, 0, 0, this.w, this.h);
+    if (spr) {
+      // 피격 시 흰 플래시 먼저 그리기
+      if (this.hitTimer > 0) {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(px, py, this.w, this.h);
+        ctx.globalAlpha = 1;
+      }
+
+      // 원본 스프라이트: 오른쪽을 기본으로, 왼쪽 이동 시 반전
+      if (this.vx < 0) {
+        ctx.translate(px + this.w, py);
+        ctx.scale(-1, 1);
+        ctx.drawImage(spr, 0, 0, this.w, this.h);
+      } else {
+        ctx.drawImage(spr, px, py, this.w, this.h);
+      }
     } else {
-      ctx.drawImage(frame, px, py, this.w, this.h);
+      // fallback: 색상 사각형
+      ctx.fillStyle = this.hitTimer > 0 ? '#ffffff' : this.color;
+      ctx.fillRect(px, py, this.w, this.h);
+      ctx.fillStyle = '#000';
+      const eyeX = this.vx >= 0 ? px + this.w - 8 : px + 4;
+      ctx.fillRect(eyeX, py + 4, 4, 4);
     }
 
     ctx.restore();
 
-    // HP bar (boss only)
+    // HP 바 (보스 전용)
     if (this.isBoss) {
       ctx.fillStyle = '#400';
       ctx.fillRect(px, py - 10, this.w, 6);

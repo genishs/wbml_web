@@ -4,12 +4,13 @@ import { Player } from './player.js';
 import { Shop } from './shop.js';
 import { buildStage, drawPlatforms, drawShops, drawPickups, drawGoal } from './stage.js';
 import { drawHUD, drawTitleScreen, drawGameOver, drawStageClear } from './ui.js';
-import { sprites } from './sprites.js';
+import { loadSprites } from './sprites.js';
 
 export class Game {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
+    this.ctx.imageSmoothingEnabled = false;
     this.input = new Input();
     this.state = GAME_STATE.TITLE;
     this.stage = 1;
@@ -18,14 +19,16 @@ export class Game {
     this.stageData = null;
     this.camX = 0;
     this.timer = 0;
-    this.maxTimer = 120 * 60; // 120 seconds
+    this.maxTimer = 120 * 60;
     this.shop = new Shop();
     this.inShop = false;
     this.particles = [];
     this.lastTime = 0;
+    this.sprites = null;
   }
 
-  start() {
+  async start() {
+    this.sprites = await loadSprites();
     requestAnimationFrame(t => this.loop(t));
   }
 
@@ -244,10 +247,10 @@ export class Game {
     // Enemies
     for (const enemy of stageData.enemies) {
       if (enemy.dead && enemy.deathTimer <= 0) continue;
-      enemy.draw(ctx, this.camX, sprites);
+      enemy.draw(ctx, this.camX, this.sprites);
     }
 
-    player.draw(ctx, this.camX, sprites);
+    player.draw(ctx, this.camX, this.sprites);
 
     // Particles
     for (const p of this.particles) {

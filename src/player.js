@@ -126,23 +126,31 @@ export class Player {
 
     if (this.invincible > 0 && Math.floor(this.invincible / 6) % 2 === 0) return;
 
-    const frame = this.attacking ? sprites.player[2] : sprites.player[this.frame % 2];
-
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    // Flip horizontally when facing left
-    if (this.facing < 0) {
-      ctx.translate(px + this.w, py);
-      ctx.scale(-1, 1);
-    } else {
-      ctx.translate(px, py);
-    }
-    ctx.drawImage(frame, 0, 0, this.w, this.h);
 
-    // Shield overlay (left side of player)
-    if (this.hasShield) {
-      ctx.fillStyle = '#C8A000';
-      ctx.fillRect(this.facing < 0 ? this.w : -6, 6, 6, 14);
+    const spr = sprites?.player;
+    if (spr) {
+      // 원본 스프라이트: 오른쪽을 바라보므로 왼쪽이면 반전
+      if (this.facing < 0) {
+        ctx.translate(px + this.w, py);
+        ctx.scale(-1, 1);
+        ctx.drawImage(spr, 0, 0, this.w, this.h);
+      } else {
+        ctx.drawImage(spr, px, py, this.w, this.h);
+      }
+    } else {
+      // fallback
+      ctx.fillStyle = this.hasArmor ? '#6080ff' : COLORS.player;
+      ctx.fillRect(px, py, this.w, this.h);
+    }
+
+    // 무적 시 흰 플래시 오버레이
+    if (this.invincible > 60) {
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(px, py, this.w, this.h);
+      ctx.globalAlpha = 1;
     }
 
     ctx.restore();
