@@ -13,6 +13,14 @@ const refFiles = {
     'hero-stage-4.png',
     'hero-stage-5.png',
   ],
+  // walk / attack frames per stage: [idle, walk1, walk2, atk1, atk2]
+  playerFrames: Array.from({ length: 6 }, (_, i) => ({
+    idle:  `hero-stage-${i}.png`,
+    walk1: `hero-stage-${i}-walk1.png`,
+    walk2: `hero-stage-${i}-walk2.png`,
+    atk1:  `hero-stage-${i}-atk1.png`,
+    atk2:  `hero-stage-${i}-atk2.png`,
+  })),
   items: {
     sword:         'sword.png',
     swordBroad:    'sword-broad.png',
@@ -62,6 +70,7 @@ export const assets = {
   items: {},
   enemies: {},
   playerStages: [],
+  playerFrames: [],  // [stage][frameName] = HTMLImageElement
 };
 
 export async function loadAssets() {
@@ -76,6 +85,16 @@ export async function loadAssets() {
   assets.enemies = Object.fromEntries(enemyEntries);
 
   assets.playerStages = await Promise.all(refFiles.playerStages.map(f => loadImage(ref(f))));
+
+  assets.playerFrames = await Promise.all(
+    refFiles.playerFrames.map(async frameSet => {
+      const entries = await Promise.all(
+        Object.entries(frameSet).map(async ([k, f]) => [k, await loadImage(ref(f))])
+      );
+      return Object.fromEntries(entries);
+    })
+  );
+
   assets.ready = true;
   return assets;
 }
@@ -84,3 +103,5 @@ export function getPlayerStageSprite(player) {
   const stageIndex = Math.min(assets.playerStages.length - 1, getPlayerAppearanceStage(player));
   return assets.playerStages[stageIndex] || null;
 }
+
+export { getPlayerAppearanceStage };

@@ -1,5 +1,5 @@
 import { GRAVITY, JUMP_FORCE, PLAYER_SPEED } from './constants.js';
-import { assets, getPlayerStageSprite } from './assets.js';
+import { assets, getPlayerStageSprite, getPlayerAppearanceStage } from './assets.js';
 import { getEquipmentAppearanceKeys, getShopItem } from './equipment.js';
 
 export class Player {
@@ -111,9 +111,14 @@ export class Player {
       if (Math.abs(this.knockbackY) < 0.05) this.knockbackY = 0;
     }
 
-    // Animation
+    // Animation frame cycling
     this.frameTimer++;
-    if (this.frameTimer > 8) { this.frameTimer = 0; this.frame = (this.frame + 1) % 2; }
+    const isMoving = Math.abs(this.vx) > 0.5;
+    const speed = isMoving ? 7 : 12;
+    if (this.frameTimer > speed) {
+      this.frameTimer = 0;
+      this.frame = (this.frame + 1) % 2;
+    }
   }
 
   _collides(r) {
@@ -186,14 +191,34 @@ export class Player {
   get hasArmor() { return this.hasEquipment('armor'); }
   get hasBoots() { return this.hasEquipment('boots'); }
 
+  _getAnimFrame() {
+    const stageIdx = Math.min(
+      (assets.playerFrames?.length ?? 1) - 1,
+      Math.max(0, this._appearanceStage ?? 0)
+    );
+    const frameSet = assets.playerFrames?.[stageIdx];
+    if (!frameSet) return getPlayerStageSprite(this); // fallback
+
+    if (this.attacking) {
+      // atk1 → atk2 를 attackTimer 기준으로 전환
+      return this.attackTimer > 9 ? frameSet.atk1 : frameSet.atk2;
+    }
+
+    const isMoving = Math.abs(this.vx) > 0.5;
+    if (!isMoving || !this.onGround) return frameSet.idle;
+    return this.frame === 0 ? frameSet.walk1 : frameSet.walk2;
+  }
+
   draw(ctx, camX, sprites) {
     const px = this.x - camX;
     const py = this.y;
 
     if (this.invincible > 0 && Math.floor(this.invincible / 6) % 2 === 0) return;
 
-    // 장비 단계에 따른 원본 스프라이트 (hero-stage-0~5)
-    const stageImg = getPlayerStageSprite(this);
+    // 장비 단계 캐시
+    this._appearanceStage = getPlayerAppearanceStage(this);
+
+    const frameImg = this._getAnimFrame();
     const appearance = getEquipmentAppearanceKeys(this);
 
     ctx.save();
@@ -206,12 +231,12 @@ export class Player {
       ctx.translate(px, py);
     }
 
-    if (stageImg) {
-      ctx.drawImage(stageImg, 0, 0, this.w, this.h);
+    if (frameImg) {
+      ctx.drawImage(frameImg, 0, 0, this.w, this.h);
     } else {
-      // fallback: 코드 스프라이트
-      const fallback = this.attacking ? sprites?.player?.[2] : sprites?.player?.[this.frame % 2];
-      if (fallback) ctx.drawImage(fallback, 0, 0, this.w, this.h);
+      // 최후 fallback: 색상 박스
+      ctx.fillStyle = '#f0c040';
+      ctx.fillRect(0, 0, this.w, this.h);
     }
 
     this.drawEquipment(ctx, appearance);
