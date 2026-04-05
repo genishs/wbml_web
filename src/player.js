@@ -114,8 +114,8 @@ export class Player {
     // Animation frame cycling
     this.frameTimer++;
     const isMoving = Math.abs(this.vx) > 0.5;
-    const speed = isMoving ? 7 : 12;
-    if (this.frameTimer > speed) {
+    const frameTick = isMoving ? 7 : 12;
+    if (this.frameTimer > frameTick) {
       this.frameTimer = 0;
       this.frame = (this.frame + 1) % 2;
     }
