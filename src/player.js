@@ -1,5 +1,5 @@
 import { GRAVITY, JUMP_FORCE, PLAYER_SPEED } from './constants.js';
-import { assets } from './assets.js';
+import { assets, getPlayerStageSprite } from './assets.js';
 import { getEquipmentAppearanceKeys, getShopItem } from './equipment.js';
 
 export class Player {
@@ -192,19 +192,27 @@ export class Player {
 
     if (this.invincible > 0 && Math.floor(this.invincible / 6) % 2 === 0) return;
 
-    const frame = this.attacking ? sprites.player[2] : sprites.player[this.frame % 2];
+    // 장비 단계에 따른 원본 스프라이트 (hero-stage-0~5)
+    const stageImg = getPlayerStageSprite(this);
     const appearance = getEquipmentAppearanceKeys(this);
 
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    // Flip horizontally when facing left
+
     if (this.facing < 0) {
       ctx.translate(px + this.w, py);
       ctx.scale(-1, 1);
     } else {
       ctx.translate(px, py);
     }
-    ctx.drawImage(frame, 0, 0, this.w, this.h);
+
+    if (stageImg) {
+      ctx.drawImage(stageImg, 0, 0, this.w, this.h);
+    } else {
+      // fallback: 코드 스프라이트
+      const fallback = this.attacking ? sprites?.player?.[2] : sprites?.player?.[this.frame % 2];
+      if (fallback) ctx.drawImage(fallback, 0, 0, this.w, this.h);
+    }
 
     this.drawEquipment(ctx, appearance);
 
