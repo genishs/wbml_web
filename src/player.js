@@ -120,42 +120,29 @@ export class Player {
     if (this.hp < 0) this.hp = 0;
   }
 
-  draw(ctx, camX) {
+  draw(ctx, camX, sprites) {
     const px = this.x - camX;
     const py = this.y;
 
     if (this.invincible > 0 && Math.floor(this.invincible / 6) % 2 === 0) return;
 
+    const frame = this.attacking ? sprites.player[2] : sprites.player[this.frame % 2];
+
     ctx.save();
-    ctx.translate(px + this.w / 2, py + this.h / 2);
-    ctx.scale(this.facing, 1);
-
-    // Body
-    ctx.fillStyle = this.hasArmor ? '#6080ff' : COLORS.player;
-    ctx.fillRect(-this.w / 2, -this.h / 2, this.w, this.h);
-
-    // Head
-    ctx.fillStyle = '#f0c8a0';
-    ctx.fillRect(-8, -this.h / 2 - 10, 16, 14);
-
-    // Eyes
-    ctx.fillStyle = '#000';
-    ctx.fillRect(2, -this.h / 2 - 6, 3, 3);
-
-    // Shield
-    if (this.hasShield) {
-      ctx.fillStyle = '#c0a000';
-      ctx.fillRect(-this.w / 2 - 6, -4, 6, 14);
+    ctx.imageSmoothingEnabled = false;
+    // Flip horizontally when facing left
+    if (this.facing < 0) {
+      ctx.translate(px + this.w, py);
+      ctx.scale(-1, 1);
+    } else {
+      ctx.translate(px, py);
     }
+    ctx.drawImage(frame, 0, 0, this.w, this.h);
 
-    // Sword / attack
-    if (this.attacking) {
-      ctx.fillStyle = COLORS.playerSword;
-      const sw = this.hasSword ? 28 : 16;
-      ctx.fillRect(this.w / 2, -4, sw, 6);
-    } else if (this.hasSword) {
-      ctx.fillStyle = COLORS.playerSword;
-      ctx.fillRect(this.w / 2, 0, 16, 4);
+    // Shield overlay (left side of player)
+    if (this.hasShield) {
+      ctx.fillStyle = '#C8A000';
+      ctx.fillRect(this.facing < 0 ? this.w : -6, 6, 6, 14);
     }
 
     ctx.restore();

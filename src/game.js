@@ -4,6 +4,7 @@ import { Player } from './player.js';
 import { Shop } from './shop.js';
 import { buildStage, drawPlatforms, drawShops, drawPickups, drawGoal } from './stage.js';
 import { drawHUD, drawTitleScreen, drawGameOver, drawStageClear } from './ui.js';
+import { sprites } from './sprites.js';
 
 export class Game {
   constructor(canvas) {
@@ -243,10 +244,10 @@ export class Game {
     // Enemies
     for (const enemy of stageData.enemies) {
       if (enemy.dead && enemy.deathTimer <= 0) continue;
-      enemy.draw(ctx, this.camX);
+      enemy.draw(ctx, this.camX, sprites);
     }
 
-    player.draw(ctx, this.camX);
+    player.draw(ctx, this.camX, sprites);
 
     // Particles
     for (const p of this.particles) {
