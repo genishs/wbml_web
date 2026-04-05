@@ -130,7 +130,7 @@ export class Game {
         // Player attack hits enemy
         const atkBox = player.getAttackBox();
         if (atkBox && enemy.collidesWith(atkBox)) {
-          if (enemy.takeDamage(player.attack)) {
+          if (enemy.takeDamage(player.attack, player.facing)) {
             if (enemy.dead) {
               player.gold += enemy.gold;
               this.score += enemy.score;

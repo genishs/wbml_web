@@ -41,6 +41,25 @@ export class Enemy {
       return;
     }
 
+    // Skip AI movement during knockback
+    if (this.hitTimer > 0) {
+      this.vy += GRAVITY;
+      this.x += this.vx;
+      this.y += this.vy;
+      this.vx *= 0.7;
+      this.onGround = false;
+      for (const p of platforms) {
+        if (this._collides(p)) {
+          if (this.vy >= 0 && this.y + this.h - this.vy <= p.y + 2) {
+            this.y = p.y - this.h;
+            this.vy = 0;
+            this.onGround = true;
+          }
+        }
+      }
+      return;
+    }
+
     // Simple AI: patrol and chase player
     const dx = player.x - this.x;
     if (Math.abs(dx) < 200) {
@@ -97,10 +116,12 @@ export class Enemy {
            this.y < box.y + box.h && this.y + this.h > box.y;
   }
 
-  takeDamage(amount) {
+  takeDamage(amount, knockbackDir = 1) {
     if (this.hitTimer > 0 || this.dead) return false;
     this.hp -= amount;
     this.hitTimer = 20;
+    this.vx = knockbackDir * 5;
+    this.vy = -3;
     if (this.hp <= 0) {
       this.dead = true;
       this.deathTimer = 40;
