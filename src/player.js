@@ -1,4 +1,6 @@
-import { GRAVITY, JUMP_FORCE, PLAYER_SPEED, TILE_SIZE, COLORS } from './constants.js';
+import { GRAVITY, JUMP_FORCE, PLAYER_SPEED } from './constants.js';
+import { assets } from './assets.js';
+import { getEquipmentAppearanceKeys, getShopItem } from './equipment.js';
 
 export class Player {
   constructor(x, y) {
@@ -10,23 +12,28 @@ export class Player {
     this.vy = 0;
     this.onGround = false;
     this.facing = 1; // 1=right, -1=left
+    this.knockbackX = 0;
+    this.knockbackY = 0;
     this.attacking = false;
     this.attackTimer = 0;
     this.attackCooldown = 0;
     this.invincible = 0;
 
     // Stats
-    this.maxHp = 6;
-    this.hp = 6;
+    this.maxHp = 10;
+    this.hp = 10;
     this.gold = 0;
-    this.attack = 1;
+    this.attack = 0;
     this.defense = 0;
-
-    // Equipment flags
-    this.hasSword = false;
-    this.hasShield = false;
-    this.hasArmor = false;
-    this.hasBoots = false;
+    this.baseMaxHp = 10;
+    this.speedMultiplier = 1;
+    this.attackRangeBonus = 0;
+    this.equipment = {
+      sword: null,
+      shield: null,
+      armor: null,
+      boots: null,
+    };
 
     // Animation
     this.frame = 0;
@@ -35,7 +42,7 @@ export class Player {
 
   update(input, platforms) {
     // Movement
-    const speed = this.hasBoots ? PLAYER_SPEED * 1.4 : PLAYER_SPEED;
+    const speed = PLAYER_SPEED * this.speedMultiplier;
     if (input.isDown('ArrowLeft')) {
       this.vx = -speed;
       this.facing = -1;
@@ -53,7 +60,7 @@ export class Player {
     }
 
     // Attack
-    if (input.wasPressed('KeyX') && this.attackCooldown <= 0) {
+    if (input.wasPressed('KeyX') && this.attackCooldown <= 0 && this.hasSword) {
       this.attacking = true;
       this.attackTimer = 18;
       this.attackCooldown = 25;
@@ -64,32 +71,45 @@ export class Player {
 
     // Gravity
     this.vy += GRAVITY;
-    this.x += this.vx;
-    this.y += this.vy;
+    if (this.invincible > 0) {
+      this.knockbackY += GRAVITY * 0.25;
+    }
+    this.x += this.vx + this.knockbackX;
+    this.y += this.vy + this.knockbackY;
 
     // Platform collision
     this.onGround = false;
     for (const p of platforms) {
       if (this._collides(p)) {
         // from above
-        if (this.vy >= 0 && this.y + this.h - this.vy <= p.y + 2) {
+        if (this.vy + this.knockbackY >= 0 && this.y + this.h - (this.vy + this.knockbackY) <= p.y + 2) {
           this.y = p.y - this.h;
           this.vy = 0;
+          this.knockbackY = 0;
           this.onGround = true;
-        } else if (this.vy < 0 && this.y - this.vy >= p.y + p.h - 2) {
+        } else if (this.vy + this.knockbackY < 0 && this.y - (this.vy + this.knockbackY) >= p.y + p.h - 2) {
           this.y = p.y + p.h;
           this.vy = 0;
-        } else if (this.vx > 0) {
+          this.knockbackY = 0;
+        } else if (this.vx + this.knockbackX > 0) {
           this.x = p.x - this.w;
           this.vx = 0;
-        } else if (this.vx < 0) {
+          this.knockbackX = 0;
+        } else if (this.vx + this.knockbackX < 0) {
           this.x = p.x + p.w;
           this.vx = 0;
+          this.knockbackX = 0;
         }
       }
     }
 
-    if (this.invincible > 0) this.invincible--;
+    if (this.invincible > 0) {
+      this.invincible--;
+      this.knockbackX *= 0.78;
+      this.knockbackY *= 0.84;
+      if (Math.abs(this.knockbackX) < 0.05) this.knockbackX = 0;
+      if (Math.abs(this.knockbackY) < 0.05) this.knockbackY = 0;
+    }
 
     // Animation
     this.frameTimer++;
@@ -102,8 +122,8 @@ export class Player {
   }
 
   getAttackBox() {
-    if (!this.attacking) return null;
-    const range = this.hasSword ? 36 : 20;
+    if (!this.attacking || !this.hasSword) return null;
+    const range = 20 + this.attackRangeBonus;
     return {
       x: this.facing > 0 ? this.x + this.w : this.x - range,
       y: this.y + 4,
@@ -112,13 +132,59 @@ export class Player {
     };
   }
 
-  takeDamage(amount) {
+  takeDamage(amount, knockbackDir = 0) {
     if (this.invincible > 0) return;
     const dmg = Math.max(1, amount - this.defense);
     this.hp -= dmg;
     this.invincible = 90;
+    this.knockbackX = knockbackDir * 6.2;
+    this.knockbackY = -3.6;
     if (this.hp < 0) this.hp = 0;
   }
+
+  equip(itemId) {
+    const item = getShopItem(itemId);
+    if (!item) return;
+    if (item.slot) {
+      this.equipment[item.slot] = item.id;
+      this.recalculateStats();
+      return;
+    }
+    if (item.id === 'potion') {
+      this.hp = this.maxHp;
+    }
+  }
+
+  recalculateStats() {
+    this.attack = 0;
+    this.defense = 0;
+    this.maxHp = this.baseMaxHp;
+    this.speedMultiplier = 1;
+    this.attackRangeBonus = 0;
+
+    Object.values(this.equipment).forEach(itemId => {
+      const item = getShopItem(itemId);
+      if (!item) return;
+      this.attack += item.bonuses.attack || 0;
+      if (item.slot === 'armor') {
+        this.defense += item.bonuses.defense || 0;
+      }
+      this.maxHp += item.bonuses.maxHp || 0;
+      this.speedMultiplier = Math.max(this.speedMultiplier, item.bonuses.speedMultiplier || 1);
+      this.attackRangeBonus += item.bonuses.range || 0;
+    });
+
+    this.hp = Math.min(this.hp, this.maxHp);
+  }
+
+  hasEquipment(slot) {
+    return !!this.equipment[slot];
+  }
+
+  get hasSword() { return this.hasEquipment('sword'); }
+  get hasShield() { return this.hasEquipment('shield'); }
+  get hasArmor() { return this.hasEquipment('armor'); }
+  get hasBoots() { return this.hasEquipment('boots'); }
 
   draw(ctx, camX, sprites) {
     const px = this.x - camX;
@@ -127,6 +193,7 @@ export class Player {
     if (this.invincible > 0 && Math.floor(this.invincible / 6) % 2 === 0) return;
 
     const frame = this.attacking ? sprites.player[2] : sprites.player[this.frame % 2];
+    const appearance = getEquipmentAppearanceKeys(this);
 
     ctx.save();
     ctx.imageSmoothingEnabled = false;
@@ -139,12 +206,34 @@ export class Player {
     }
     ctx.drawImage(frame, 0, 0, this.w, this.h);
 
-    // Shield overlay (left side of player)
-    if (this.hasShield) {
-      ctx.fillStyle = '#C8A000';
-      ctx.fillRect(this.facing < 0 ? this.w : -6, 6, 6, 14);
-    }
+    this.drawEquipment(ctx, appearance);
 
     ctx.restore();
+  }
+
+  drawEquipment(ctx, appearance) {
+    const armorImg = appearance.armor ? assets.items[appearance.armor] : null;
+    if (armorImg) {
+      ctx.drawImage(armorImg, 5, 6, 14, 14);
+    }
+
+    const bootsImg = appearance.boots ? assets.items[appearance.boots] : null;
+    if (bootsImg) {
+      ctx.drawImage(bootsImg, 6, 18, 12, 8);
+    }
+
+    const shieldImg = appearance.shield ? assets.items[appearance.shield] : null;
+    if (shieldImg) {
+      ctx.drawImage(shieldImg, -7, 5, 11, 14);
+    }
+
+    const swordImg = appearance.sword ? assets.items[appearance.sword] : null;
+    if (swordImg) {
+      if (this.attacking) {
+        ctx.drawImage(swordImg, 10, 5, 18, 11);
+      } else {
+        ctx.drawImage(swordImg, 9, 8, 13, 8);
+      }
+    }
   }
 }

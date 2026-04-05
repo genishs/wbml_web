@@ -1,33 +1,54 @@
-import { COLORS } from './constants.js';
-
-const SHOP_ITEMS = [
-  { id: 'sword',  label: 'IRON SWORD',  cost: 50,  desc: '공격력 +1, 사거리 증가' },
-  { id: 'shield', label: 'WOOD SHIELD', cost: 40,  desc: '방어력 +1' },
-  { id: 'armor',  label: 'CHAIN ARMOR', cost: 80,  desc: '방어력 +1, HP +2' },
-  { id: 'boots',  label: 'SPEED BOOTS', cost: 60,  desc: '이동속도 증가' },
-  { id: 'potion', label: 'LIFE POTION', cost: 30,  desc: 'HP 완전 회복' },
-];
+import { SHOP_TYPE, getShopItemsForType, getShopTitle } from './equipment.js';
 
 export class Shop {
   constructor() {
     this.cursor = 0;
     this.message = '';
     this.messageTimer = 0;
+    this.type = SHOP_TYPE.SHIELD;
+    this.sessionHandled = false;
+  }
+
+  open(type) {
+    this.type = type;
+    this.cursor = 0;
+    this.message = '';
+    this.messageTimer = 0;
+    this.sessionHandled = false;
   }
 
   getItems(player) {
-    return SHOP_ITEMS.filter(item => {
-      if (item.id === 'sword'  && player.hasSword)  return false;
-      if (item.id === 'shield' && player.hasShield) return false;
-      if (item.id === 'armor'  && player.hasArmor)  return false;
-      if (item.id === 'boots'  && player.hasBoots)  return false;
-      return true;
-    });
+    return getShopItemsForType(this.type, player);
   }
 
   update(input, player) {
     const items = this.getItems(player);
-    if (items.length === 0) return 'exit';
+
+    if (this.type === SHOP_TYPE.STARTER_GIFT) {
+      if (!this.sessionHandled) {
+        if (items[0]) {
+          player.equip(items[0].id);
+          this.message = '기본 칼을 받았다!';
+        } else {
+          this.message = '이미 기본 칼을 받았다.';
+        }
+        this.messageTimer = 1;
+        this.sessionHandled = true;
+      }
+
+      if (input.wasPressed('Enter') || input.wasPressed('KeyX') || input.wasPressed('Escape') || input.wasPressed('KeyZ')) {
+        return 'exit';
+      }
+      return null;
+    }
+
+    if (items.length === 0) {
+      this.message = this.type === SHOP_TYPE.WEAPON ? '무기 상점은 아직 준비 중이다.' : '더 좋은 장비가 없다.';
+      if (input.wasPressed('Enter') || input.wasPressed('KeyX') || input.wasPressed('Escape') || input.wasPressed('KeyZ')) {
+        return 'exit';
+      }
+      return null;
+    }
 
     if (this.cursor >= items.length) this.cursor = items.length - 1;
 
@@ -38,7 +59,7 @@ export class Shop {
       const item = items[this.cursor];
       if (player.gold >= item.cost) {
         player.gold -= item.cost;
-        this._applyItem(item.id, player);
+        player.equip(item.id);
         this.message = `${item.label} 구입!`;
       } else {
         this.message = 'GOLD가 부족합니다!';
@@ -52,17 +73,7 @@ export class Shop {
     return null;
   }
 
-  _applyItem(id, player) {
-    switch (id) {
-      case 'sword':  player.hasSword = true; player.attack += 1; break;
-      case 'shield': player.hasShield = true; player.defense += 1; break;
-      case 'armor':  player.hasArmor = true; player.defense += 1; player.maxHp += 2; player.hp = Math.min(player.hp + 2, player.maxHp); break;
-      case 'boots':  player.hasBoots = true; break;
-      case 'potion': player.hp = player.maxHp; break;
-    }
-  }
-
-  draw(ctx, player) {
+  draw(ctx, player, assets) {
     const W = 400, H = 280;
     const sx = 120, sy = 40;
 
@@ -74,13 +85,40 @@ export class Shop {
 
     ctx.fillStyle = '#e94560';
     ctx.font = 'bold 20px monospace';
-    ctx.fillText('* SHOP *', sx + 155, sy + 30);
+    ctx.fillText(getShopTitle(this.type), sx + 110, sy + 30);
 
     ctx.font = '14px monospace';
     ctx.fillStyle = '#ffd700';
     ctx.fillText(`GOLD: ${player.gold}`, sx + 280, sy + 30);
 
     const items = this.getItems(player);
+    if (this.type === SHOP_TYPE.STARTER_GIFT) {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '15px monospace';
+      ctx.fillText(this.message || '상인이 기본 칼을 건넨다.', sx + 82, sy + 120);
+      const icon = assets?.items?.sword;
+      if (icon) {
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(icon, sx + 170, sy + 150, 60, 36);
+        ctx.restore();
+      }
+      ctx.fillStyle = '#888';
+      ctx.font = '12px monospace';
+      ctx.fillText('ENTER / Z / ESC: 돌아가기', sx + 112, sy + H - 20);
+      return;
+    }
+
+    if (items.length === 0) {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '15px monospace';
+      ctx.fillText(this.message || '더 좋은 장비가 없다.', sx + 72, sy + 140);
+      ctx.fillStyle = '#888';
+      ctx.font = '12px monospace';
+      ctx.fillText('ENTER / Z / ESC: 돌아가기', sx + 112, sy + H - 20);
+      return;
+    }
+
     items.forEach((item, i) => {
       const iy = sy + 60 + i * 38;
       if (i === this.cursor) {
@@ -89,13 +127,21 @@ export class Shop {
         ctx.fillStyle = '#ffffff';
         ctx.fillText('>', sx + 14, iy + 16);
       }
+      const icon = item.iconKey ? assets?.items?.[item.iconKey] : null;
+      if (icon) {
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.globalAlpha = player.gold >= item.cost ? 1 : 0.4;
+        ctx.drawImage(icon, sx + 28, iy - 2, 28, 28);
+        ctx.restore();
+      }
       ctx.fillStyle = player.gold >= item.cost ? '#ffffff' : '#888888';
-      ctx.fillText(item.label, sx + 30, iy + 16);
+      ctx.fillText(item.label, sx + 66, iy + 16);
       ctx.fillStyle = '#ffd700';
       ctx.fillText(`${item.cost}G`, sx + 270, iy + 16);
       ctx.fillStyle = '#aaaaaa';
       ctx.font = '11px monospace';
-      ctx.fillText(item.desc, sx + 30, iy + 28);
+      ctx.fillText(item.desc, sx + 66, iy + 28);
       ctx.font = '14px monospace';
     });
 

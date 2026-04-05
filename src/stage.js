@@ -1,5 +1,7 @@
 import { TILE_SIZE, COLORS } from './constants.js';
 import { Enemy } from './enemy.js';
+import { SHOP_TYPE } from './equipment.js';
+import { createSignpost } from './signpost.js';
 
 // Each stage: platforms, enemies, shop positions, goal
 export function buildStage(stageNum) {
@@ -7,7 +9,9 @@ export function buildStage(stageNum) {
   const platforms = [];
   const enemies = [];
   const pickups = [];
-  const shops = [];
+  const doors = [];
+  const rooms = {};
+  const signposts = [];
 
   // Ground (always)
   const groundLen = 2400 + stageNum * 800;
@@ -15,55 +19,117 @@ export function buildStage(stageNum) {
 
   // Stage-specific layout
   if (stageNum === 1) {
-    platforms.push({ x: 200, y: 240, w: 96, h: 16 });
-    platforms.push({ x: 400, y: 200, w: 96, h: 16 });
-    platforms.push({ x: 640, y: 240, w: 128, h: 16 });
-    platforms.push({ x: 900, y: 180, w: 80, h: 16 });
-    platforms.push({ x: 1100, y: 240, w: 96, h: 16 });
+    platforms.push({ x: 300, y: 252, w: 84, h: 16 });
+    platforms.push({ x: 640, y: 224, w: 92, h: 16 });
+    platforms.push({ x: 980, y: 244, w: 112, h: 16 });
+    platforms.push({ x: 1300, y: 212, w: 88, h: 16 });
+    platforms.push({ x: 1620, y: 238, w: 120, h: 16 });
 
-    enemies.push(new Enemy('slime', 300, groundY - 16));
-    enemies.push(new Enemy('slime', 600, groundY - 16));
-    enemies.push(new Enemy('goblin', 850, groundY - 26));
-    enemies.push(new Enemy('slime', 1000, groundY - 16));
-    enemies.push(new Enemy('goblin', 1200, groundY - 26));
-    enemies.push(new Enemy('goblin', 1400, groundY - 26));
-    enemies.push(new Enemy('dragon', 1700, groundY - 40));
+    enemies.push(new Enemy('snake', 760, groundY - 12));
+    enemies.push(new Enemy('anaconda', 930, groundY - 14, { patrolMinX: 860, patrolMaxX: 1030 }));
+    enemies.push(new Enemy('snake', 1180, groundY - 12));
+    enemies.push(new Enemy('anaconda', 1460, groundY - 14, { patrolMinX: 1390, patrolMaxX: 1570 }));
+    enemies.push(new Enemy('snake', 1730, groundY - 12));
 
-    shops.push({ x: 500, y: groundY - 48, w: 48, h: 48 });
-    shops.push({ x: 1300, y: groundY - 48, w: 48, h: 48 });
+    signposts.push(createSignpost({
+      x: 112,
+      y: groundY - 28,
+      title: '안내',
+      message: '앞의 문으로 들어가 기본 칼을 받아라.',
+    }));
+
+    doors.push(makeDoor('shop-1a', 190, groundY, 'shop', SHOP_TYPE.STARTER_GIFT));
+    doors.push(makeDoor('shop-1b', 1240, groundY, 'shop', SHOP_TYPE.SHIELD));
+    doors.push(makeDoor('boss-1', 1840, groundY, 'boss'));
 
     // Gold pickups
     for (let i = 0; i < 12; i++) {
       pickups.push({ x: 150 + i * 150, y: groundY - 32, type: 'gold', value: 10, collected: false });
     }
   } else if (stageNum === 2) {
-    platforms.push({ x: 150, y: 250, w: 80, h: 16 });
-    platforms.push({ x: 350, y: 200, w: 80, h: 16 });
-    platforms.push({ x: 550, y: 150, w: 80, h: 16 });
-    platforms.push({ x: 750, y: 200, w: 96, h: 16 });
-    platforms.push({ x: 1000, y: 240, w: 96, h: 16 });
-    platforms.push({ x: 1300, y: 200, w: 80, h: 16 });
-    platforms.push({ x: 1600, y: 240, w: 112, h: 16 });
+    platforms.push({ x: 250, y: 248, w: 90, h: 16 });
+    platforms.push({ x: 520, y: 212, w: 120, h: 16 });
+    platforms.push({ x: 840, y: 172, w: 80, h: 16 });
+    platforms.push({ x: 1160, y: 228, w: 100, h: 16 });
+    platforms.push({ x: 1460, y: 190, w: 88, h: 16 });
+    platforms.push({ x: 1760, y: 236, w: 118, h: 16 });
+    platforms.push({ x: 2140, y: 220, w: 92, h: 16 });
 
-    enemies.push(new Enemy('goblin', 400, groundY - 26));
-    enemies.push(new Enemy('goblin', 700, groundY - 26));
-    enemies.push(new Enemy('knight', 900, groundY - 28));
-    enemies.push(new Enemy('goblin', 1100, groundY - 26));
-    enemies.push(new Enemy('knight', 1350, groundY - 28));
-    enemies.push(new Enemy('knight', 1550, groundY - 28));
-    enemies.push(new Enemy('dragon', 2000, groundY - 40));
+    enemies.push(new Enemy('orc', 420, groundY - 26));
+    enemies.push(new Enemy('goblin', 720, groundY - 26));
+    enemies.push(new Enemy('fangBat', 900, 170));
+    enemies.push(new Enemy('myconid', 1160, groundY - 20));
+    enemies.push(new Enemy('orc', 1490, groundY - 26));
+    enemies.push(new Enemy('goblin', 1860, groundY - 26));
+    enemies.push(new Enemy('vampireBat', 2170, 176));
 
-    shops.push({ x: 600, y: groundY - 48, w: 48, h: 48 });
-    shops.push({ x: 1450, y: groundY - 48, w: 48, h: 48 });
+    doors.push(makeDoor('shop-2a', 340, groundY, 'shop', SHOP_TYPE.BOOTS));
+    doors.push(makeDoor('shop-2b', 1320, groundY, 'shop', SHOP_TYPE.SHIELD));
+    doors.push(makeDoor('shop-2c', 2060, groundY, 'shop', SHOP_TYPE.WEAPON));
+    doors.push(makeDoor('boss-2', 2360, groundY, 'boss'));
 
     for (let i = 0; i < 15; i++) {
       pickups.push({ x: 200 + i * 160, y: groundY - 32, type: 'gold', value: 15, collected: false });
     }
   }
 
+  for (const door of doors) {
+    rooms[door.roomId] = buildRoom(door, stageNum);
+  }
+
   const goalX = groundLen - 120;
 
-  return { platforms, enemies, pickups, shops, goalX, groundLen };
+  return { platforms, enemies, pickups, doors, rooms, signposts, goalX, groundLen };
+}
+
+function makeDoor(id, x, groundY, roomType, shopType = null) {
+  return {
+    id,
+    x,
+    y: groundY - 52,
+    w: 40,
+    h: 52,
+    roomId: id,
+    roomType,
+    shopType,
+  };
+}
+
+function buildRoom(door, stageNum) {
+  const roomGroundY = 312;
+  const platforms = [{ x: 0, y: roomGroundY, w: 640, h: 48, isGround: true }];
+  const enemies = [];
+  const merchant = { x: 470, y: roomGroundY - 56, w: 56, h: 56 };
+  const exitDoor = { x: 56, y: roomGroundY - 52, w: 40, h: 52 };
+
+  if (door.roomType === 'boss') {
+    const bossType = getBossType(stageNum);
+    const bossX = bossType === 'dragon' ? 400 : 430;
+    const bossY = bossType === 'death' ? roomGroundY - 84 : bossType === 'mushroomKing' ? roomGroundY - 28 : roomGroundY - 40;
+    enemies.push(new Enemy(bossType, bossX, bossY));
+  }
+
+  return {
+    id: door.id,
+    type: door.roomType,
+    shopType: door.shopType,
+    platforms,
+    enemies,
+    merchant,
+    exitDoor,
+    entryX: 112,
+    entryY: roomGroundY - 28,
+    worldDoorId: door.id,
+    cleared: false,
+  };
+}
+
+function getBossType(stageNum) {
+  switch (stageNum) {
+    case 1: return 'death';
+    case 2: return 'mushroomKing';
+    default: return 'dragon';
+  }
 }
 
 export function drawPlatforms(ctx, platforms, camX) {
@@ -90,18 +156,33 @@ export function drawPlatforms(ctx, platforms, camX) {
   }
 }
 
-export function drawShops(ctx, shops, camX) {
-  for (const s of shops) {
-    const px = s.x - camX;
-    if (px + s.w < 0 || px > 640) continue;
+export function drawDoors(ctx, doors, camX, assets) {
+  for (const door of doors) {
+    const px = door.x - camX;
+    if (px + door.w < 0 || px > 640) continue;
 
-    ctx.fillStyle = COLORS.shop;
-    ctx.fillRect(px, s.y, s.w, s.h);
+    ctx.fillStyle = door.roomType === 'boss' ? '#5e1b1b' : COLORS.shop;
+    ctx.fillRect(px, door.y, door.w, door.h);
+    ctx.fillStyle = '#160808';
+    ctx.fillRect(px + 6, door.y + 10, door.w - 12, door.h - 10);
+    ctx.fillStyle = '#d7b46a';
+    ctx.fillRect(px + door.w - 10, door.y + 27, 4, 4);
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 10px monospace';
-    ctx.fillText('SHOP', px + 4, s.y + 18);
-    ctx.font = '9px monospace';
-    ctx.fillText('ENTER', px + 5, s.y + 32);
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText(getDoorLabel(door), px + 5, door.y - 4);
+
+    const sign = door.roomType === 'boss' ? assets?.enemies?.dragon : getDoorIcon(door, assets);
+    if (sign && door.roomType !== 'boss') {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(sign, px + 11, door.y - 18, 18, 18);
+      ctx.restore();
+    } else if (sign) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(sign, px + 6, door.y - 26, 28, 24);
+      ctx.restore();
+    }
   }
 }
 
@@ -129,4 +210,66 @@ export function drawGoal(ctx, goalX, camX, groundY) {
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 9px monospace';
   ctx.fillText('GOAL', px + 10, groundY - 63);
+}
+
+export function drawRoom(ctx, room, assets) {
+  ctx.fillStyle = room.type === 'boss' ? '#261010' : '#2a1f17';
+  ctx.fillRect(0, 0, 640, 360);
+
+  ctx.fillStyle = room.type === 'boss' ? '#4a2222' : '#4d3524';
+  for (let i = 0; i < 10; i++) {
+    ctx.fillRect(i * 64, 0, 32, 220);
+  }
+
+  drawPlatforms(ctx, room.platforms, 0);
+
+  drawInteriorDoor(ctx, room.exitDoor, room.type === 'boss' ? '#7b2d2d' : COLORS.shop);
+
+  if (room.type === 'shop') {
+    ctx.fillStyle = '#6e4c31';
+    ctx.fillRect(room.merchant.x - 10, room.merchant.y + 18, 84, 34);
+    ctx.fillStyle = '#d8c49a';
+    ctx.fillRect(room.merchant.x, room.merchant.y, 44, 52);
+    ctx.fillStyle = '#3a2416';
+    ctx.fillRect(room.merchant.x + 12, room.merchant.y + 12, 20, 8);
+    const icon = assets?.items?.shield || assets?.items?.swordBroad;
+    if (icon) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(icon, room.merchant.x + 48, room.merchant.y + 8, 20, 20);
+      ctx.restore();
+    }
+  }
+}
+
+function getDoorLabel(door) {
+  if (door.roomType === 'boss') return 'BOSS';
+  switch (door.shopType) {
+    case SHOP_TYPE.STARTER_GIFT: return 'GIFT';
+    case SHOP_TYPE.SHIELD: return 'SHIELD';
+    case SHOP_TYPE.ARMOR: return 'ARMOR';
+    case SHOP_TYPE.BOOTS: return 'BOOTS';
+    case SHOP_TYPE.WEAPON: return 'WEAPON';
+    default: return 'SHOP';
+  }
+}
+
+function getDoorIcon(door, assets) {
+  switch (door.shopType) {
+    case SHOP_TYPE.STARTER_GIFT: return assets?.items?.sword;
+    case SHOP_TYPE.SHIELD: return assets?.items?.shield;
+    case SHOP_TYPE.ARMOR: return assets?.items?.armor;
+    case SHOP_TYPE.BOOTS: return assets?.items?.boots;
+    case SHOP_TYPE.WEAPON: return assets?.items?.swordBroad;
+    default: return assets?.items?.shield || assets?.items?.swordBroad;
+  }
+}
+
+function drawInteriorDoor(ctx, door, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(door.x, door.y, door.w, door.h);
+  ctx.fillStyle = '#130d0d';
+  ctx.fillRect(door.x + 6, door.y + 10, door.w - 12, door.h - 10);
+  ctx.fillStyle = '#d7b46a';
+  ctx.fillRect(door.x + door.w - 10, door.y + 27, 4, 4);
 }

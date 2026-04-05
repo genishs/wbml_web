@@ -1,20 +1,25 @@
+import { SHOP_ITEMS } from './equipment.js';
 import { COLORS } from './constants.js';
+import { getPlayerStageSprite } from './assets.js';
 
-export function drawHUD(ctx, player, timer, stage, score) {
+export function drawHUD(ctx, player, timer, stage, score, assets) {
   // HUD background
   ctx.fillStyle = 'rgba(0,0,0,0.7)';
   ctx.fillRect(0, 0, 640, 36);
 
   // HP hearts
-  for (let i = 0; i < player.maxHp; i++) {
-    ctx.fillStyle = i < player.hp ? COLORS.heart : COLORS.heartEmpty;
-    drawHeart(ctx, 10 + i * 18, 8);
+  const maxHearts = Math.ceil(player.maxHp / 2);
+  for (let i = 0; i < maxHearts; i++) {
+    const heartValue = Math.max(0, Math.min(2, player.hp - i * 2));
+    drawHeart(ctx, 10 + i * 18, 8, heartValue);
   }
 
   // Gold
   ctx.fillStyle = COLORS.gold;
   ctx.font = 'bold 14px monospace';
   ctx.fillText(`G:${player.gold}`, 200, 24);
+
+  drawEquipmentRow(ctx, player, assets);
 
   // Score
   ctx.fillStyle = '#ffffff';
@@ -30,15 +35,68 @@ export function drawHUD(ctx, player, timer, stage, score) {
   ctx.fillText(`TIME:${String(t).padStart(3, '0')}`, 560, 24);
 }
 
-function drawHeart(ctx, x, y) {
+function drawHeart(ctx, x, y, fill = 2) {
+  ctx.fillStyle = COLORS.heartEmpty;
   ctx.beginPath();
   ctx.moveTo(x + 8, y + 14);
   ctx.bezierCurveTo(x - 2, y + 6, x - 2, y, x + 8, y + 6);
   ctx.bezierCurveTo(x + 18, y, x + 18, y + 6, x + 8, y + 14);
   ctx.fill();
+
+  if (fill <= 0) return;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(x + 8, y + 14);
+  ctx.bezierCurveTo(x - 2, y + 6, x - 2, y, x + 8, y + 6);
+  ctx.bezierCurveTo(x + 18, y, x + 18, y + 6, x + 8, y + 14);
+  ctx.clip();
+  ctx.fillStyle = COLORS.heart;
+  const fillWidth = fill === 1 ? 9 : 18;
+  ctx.fillRect(x - 1, y - 1, fillWidth, 16);
+  ctx.restore();
 }
 
-export function drawTitleScreen(ctx) {
+function drawEquipmentRow(ctx, player, assets) {
+  const items = [
+    ['sword', player.equipment.sword],
+    ['shield', player.equipment.shield],
+    ['armor', player.equipment.armor],
+    ['boots', player.equipment.boots],
+  ];
+
+  const itemDefs = Object.fromEntries(SHOP_ITEMS.map(item => [item.id, item]));
+
+  items.forEach(([slot, itemId], index) => {
+    const owned = !!itemId;
+    const x = 245 + index * 18;
+    const y = 4;
+    ctx.fillStyle = owned ? '#3b2c14' : '#221d1d';
+    ctx.fillRect(x, y, 16, 16);
+    ctx.strokeStyle = owned ? '#ffd36e' : '#555';
+    ctx.strokeRect(x + 0.5, y + 0.5, 15, 15);
+
+    const iconKey = itemDefs[itemId]?.iconKey || slot;
+    const img = assets?.items?.[iconKey];
+    if (img) {
+      ctx.save();
+      ctx.globalAlpha = owned ? 1 : 0.3;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, x + 1, y + 1, 14, 14);
+      ctx.restore();
+    }
+  });
+
+  const hero = getPlayerStageSprite(player);
+  if (hero) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(hero, 126, 2, 22, 28);
+    ctx.restore();
+  }
+}
+
+export function drawTitleScreen(ctx, assets) {
   ctx.fillStyle = '#1a1a2e';
   ctx.fillRect(0, 0, 640, 360);
 
@@ -74,6 +132,22 @@ export function drawTitleScreen(ctx) {
   ctx.font = '12px monospace';
   ctx.fillText('← → 이동   Z 점프   X 공격   ENTER 상점', 320, 310);
   ctx.fillText('© 2024 WBML WEB HOMAGE', 320, 340);
+
+  const hero = assets?.playerStages?.[5];
+  if (hero) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(hero, 110, 140, 110, 110);
+    ctx.restore();
+  }
+
+  const dragon = assets?.enemies?.dragon;
+  if (dragon) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(dragon, 430, 130, 130, 130);
+    ctx.restore();
+  }
 
   ctx.textAlign = 'left';
 }
@@ -112,4 +186,26 @@ export function drawStageClear(ctx, stage, score) {
     ctx.fillText('PRESS ENTER FOR NEXT STAGE', 320, 260);
   }
   ctx.textAlign = 'left';
+}
+
+export function drawSignpostMessage(ctx, signpost) {
+  if (!signpost) return;
+
+  const boxX = 56;
+  const boxY = 284;
+  const boxW = 528;
+  const boxH = 52;
+
+  ctx.fillStyle = 'rgba(14, 12, 18, 0.82)';
+  ctx.fillRect(boxX, boxY, boxW, boxH);
+  ctx.strokeStyle = '#f0d186';
+  ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxW - 1, boxH - 1);
+
+  ctx.fillStyle = '#f8dd8c';
+  ctx.font = 'bold 12px monospace';
+  ctx.fillText(signpost.title, boxX + 14, boxY + 16);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '12px monospace';
+  ctx.fillText(signpost.message, boxX + 14, boxY + 35);
 }

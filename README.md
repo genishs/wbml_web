@@ -56,11 +56,46 @@
 
 ---
 
+## 로컬 실행
+
+이 프로젝트는 빌드 과정이 없는 정적 사이트라서, 로컬에서도 간단한 HTTP 서버만 띄우면 됩니다.
+
+### 방법 1: Python
+
+```bash
+cd C:\Users\user\Documents\workspace\study\wbml_web
+python -m http.server 8000
+```
+
+브라우저에서 `http://localhost:8000` 으로 접속하면 됩니다.
+
+### 방법 2: Node.js
+
+```bash
+cd C:\Users\user\Documents\workspace\study\wbml_web
+npx serve .
+```
+
+또는
+
+```bash
+cd C:\Users\user\Documents\workspace\study\wbml_web
+npx http-server .
+```
+
+### 왜 서버가 필요한가
+
+`index.html`을 파일로 직접 여는 방식(`file:///...`)은 ES Modules와 이미지 로딩 경로 때문에 브라우저 보안 정책에 막힐 수 있습니다. GitHub Pages도 결국 정적 파일을 HTTP로 서비스하므로, 로컬에서도 같은 방식으로 확인하는 것이 가장 안전합니다.
+
+---
+
 ## 파일 구조
 
 ```
 wbml_web/
 ├── index.html
+├── assets/
+│   └── reference_art/ # 프로젝트 내부로 복사한 참고 이미지
 ├── src/
 │   ├── main.js        # 진입점
 │   ├── game.js        # 메인 게임 루프 및 상태 관리
@@ -81,6 +116,7 @@ wbml_web/
 
 | 버전 | 날짜 | 내용 |
 |---|---|---|
+| v0.5 | 2026-04-05 | 참고 이미지를 프로젝트 내부 `assets/reference_art`로 복사해 사용, 상점/HUD/적/타이틀 그래픽 연결, 로컬 실행 가이드 추가 |
 | v0.4 | 2026-04-05 | 픽셀 아트 스프라이트 적용 — 플레이어(3프레임), 슬라임/고블린/기사/드래곤 원본 스타일 재현 |
 | v0.3 | 2026-04-05 | 풀스크린 레터박스 — 창 크기에 맞게 CSS transform 스케일, 16:9 비율 유지 |
 | v0.2 | 2026-04-05 | 적 피격 시 넉백 추가 — 공격 방향으로 밀려남, 넉백 중 AI 억제 |
