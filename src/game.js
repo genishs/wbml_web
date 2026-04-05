@@ -35,12 +35,13 @@ export class Game {
   }
 
   loop(timestamp) {
-    const dt = Math.min((timestamp - this.lastTime) / 16.67, 3);
-    this.lastTime = timestamp;
+    requestAnimationFrame(t => this.loop(t));
+    const elapsed = timestamp - this.lastTime;
+    if (elapsed < 16.67) return; // 60fps 상한 - 더 빠른 모니터에서도 속도 일정
+    this.lastTime = timestamp - (elapsed % 16.67); // 오버슈트 보정
     this.input.update();
     this.update();
     this.draw();
-    requestAnimationFrame(t => this.loop(t));
   }
 
   initStage({ preservePlayer = false } = {}) {
