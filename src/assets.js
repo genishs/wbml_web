@@ -25,6 +25,7 @@ const refFiles = {
     sword:         'sword.png',
     swordBroad:    'sword-broad.png',
     swordGradius:  'sword-gradius.png',
+    swordGreat:    'sword-great.png',
     swordExcalibur:'sword-excalibur.png',
     swordLegend:   'sword-legend.png',
     shield:        'shield.png',

@@ -48,6 +48,8 @@ export class Game {
     this.stageData = buildStage(this.stage);
     if (!preservePlayer || !this.player) {
       this.player = new Player(80, 200);
+      this.player.equip('knife');   // 기본 칼 지급 (테스트용)
+      this.player.gold = 9999;      // 충분한 골드 (테스트용)
     } else {
       this.player.x = 80;
       this.player.y = 200;

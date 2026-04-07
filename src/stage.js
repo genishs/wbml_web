@@ -34,11 +34,11 @@ export function buildStage(stageNum) {
     signposts.push(createSignpost({
       x: 112,
       y: groundY - 28,
-      title: '안내',
-      message: '앞의 문으로 들어가 기본 칼을 받아라.',
+      title: '무기 상점',
+      message: '앞의 상점에서 무기를 구매하라.',
     }));
 
-    doors.push(makeDoor('shop-1a', 190, groundY, 'shop', SHOP_TYPE.STARTER_GIFT));
+    doors.push(makeDoor('shop-1a', 190, groundY, 'shop', SHOP_TYPE.WEAPON));
     doors.push(makeDoor('shop-1b', 1240, groundY, 'shop', SHOP_TYPE.SHIELD));
     doors.push(makeDoor('boss-1', 1840, groundY, 'boss'));
 
@@ -63,13 +63,84 @@ export function buildStage(stageNum) {
     enemies.push(new Enemy('goblin', 1860, groundY - 26));
     enemies.push(new Enemy('vampireBat', 2170, 176));
 
-    doors.push(makeDoor('shop-2a', 340, groundY, 'shop', SHOP_TYPE.BOOTS));
+    doors.push(makeDoor('shop-2a', 340, groundY, 'shop', SHOP_TYPE.WEAPON));
     doors.push(makeDoor('shop-2b', 1320, groundY, 'shop', SHOP_TYPE.SHIELD));
-    doors.push(makeDoor('shop-2c', 2060, groundY, 'shop', SHOP_TYPE.WEAPON));
+    doors.push(makeDoor('shop-2c', 2060, groundY, 'shop', SHOP_TYPE.BOOTS));
     doors.push(makeDoor('boss-2', 2360, groundY, 'boss'));
 
     for (let i = 0; i < 15; i++) {
       pickups.push({ x: 200 + i * 160, y: groundY - 32, type: 'gold', value: 15, collected: false });
+    }
+  } else if (stageNum === 3) {
+    platforms.push({ x: 300, y: 248, w: 90, h: 16 });
+    platforms.push({ x: 640, y: 212, w: 100, h: 16 });
+    platforms.push({ x: 1000, y: 180, w: 80, h: 16 });
+    platforms.push({ x: 1360, y: 224, w: 110, h: 16 });
+    platforms.push({ x: 1720, y: 192, w: 90, h: 16 });
+    platforms.push({ x: 2100, y: 236, w: 120, h: 16 });
+
+    enemies.push(new Enemy('knight', 480, groundY - 28));
+    enemies.push(new Enemy('orc', 760, groundY - 26));
+    enemies.push(new Enemy('goblin', 1040, groundY - 26));
+    enemies.push(new Enemy('knight', 1400, groundY - 28));
+    enemies.push(new Enemy('orc', 1760, groundY - 26));
+
+    doors.push(makeDoor('shop-3a', 190, groundY, 'shop', SHOP_TYPE.WEAPON));
+    doors.push(makeDoor('shop-3b', 1180, groundY, 'shop', SHOP_TYPE.ARMOR));
+    doors.push(makeDoor('boss-3', 2160, groundY, 'boss'));
+
+    for (let i = 0; i < 18; i++) {
+      pickups.push({ x: 200 + i * 170, y: groundY - 32, type: 'gold', value: 20, collected: false });
+    }
+  } else if (stageNum === 4) {
+    platforms.push({ x: 280, y: 240, w: 100, h: 16 });
+    platforms.push({ x: 600, y: 200, w: 90, h: 16 });
+    platforms.push({ x: 960, y: 168, w: 80, h: 16 });
+    platforms.push({ x: 1320, y: 216, w: 110, h: 16 });
+    platforms.push({ x: 1680, y: 180, w: 88, h: 16 });
+    platforms.push({ x: 2060, y: 228, w: 100, h: 16 });
+    platforms.push({ x: 2460, y: 200, w: 90, h: 16 });
+
+    enemies.push(new Enemy('redKnight', 440, groundY - 28));
+    enemies.push(new Enemy('knight', 720, groundY - 28));
+    enemies.push(new Enemy('orc', 1000, groundY - 26));
+    enemies.push(new Enemy('redKnight', 1380, groundY - 28));
+    enemies.push(new Enemy('knight', 1740, groundY - 28));
+    enemies.push(new Enemy('orc', 2120, groundY - 26));
+
+    doors.push(makeDoor('shop-4a', 190, groundY, 'shop', SHOP_TYPE.WEAPON));
+    doors.push(makeDoor('shop-4b', 1200, groundY, 'shop', SHOP_TYPE.SHIELD));
+    doors.push(makeDoor('shop-4c', 2200, groundY, 'shop', SHOP_TYPE.ARMOR));
+    doors.push(makeDoor('boss-4', 2760, groundY, 'boss'));
+
+    for (let i = 0; i < 20; i++) {
+      pickups.push({ x: 200 + i * 180, y: groundY - 32, type: 'gold', value: 25, collected: false });
+    }
+  } else if (stageNum === 5) {
+    platforms.push({ x: 300, y: 236, w: 100, h: 16 });
+    platforms.push({ x: 620, y: 196, w: 90, h: 16 });
+    platforms.push({ x: 980, y: 160, w: 80, h: 16 });
+    platforms.push({ x: 1360, y: 208, w: 110, h: 16 });
+    platforms.push({ x: 1740, y: 172, w: 88, h: 16 });
+    platforms.push({ x: 2120, y: 220, w: 100, h: 16 });
+    platforms.push({ x: 2540, y: 188, w: 92, h: 16 });
+    platforms.push({ x: 2940, y: 228, w: 120, h: 16 });
+
+    enemies.push(new Enemy('silverKnight', 460, groundY - 28));
+    enemies.push(new Enemy('redKnight', 740, groundY - 28));
+    enemies.push(new Enemy('knight', 1020, groundY - 28));
+    enemies.push(new Enemy('silverKnight', 1420, groundY - 28));
+    enemies.push(new Enemy('redKnight', 1800, groundY - 28));
+    enemies.push(new Enemy('knight', 2180, groundY - 28));
+    enemies.push(new Enemy('silverKnight', 2600, groundY - 28));
+
+    doors.push(makeDoor('shop-5a', 190, groundY, 'shop', SHOP_TYPE.WEAPON));
+    doors.push(makeDoor('shop-5b', 1300, groundY, 'shop', SHOP_TYPE.ARMOR));
+    doors.push(makeDoor('shop-5c', 2400, groundY, 'shop', SHOP_TYPE.SHIELD));
+    doors.push(makeDoor('boss-5', 3200, groundY, 'boss'));
+
+    for (let i = 0; i < 24; i++) {
+      pickups.push({ x: 200 + i * 180, y: groundY - 32, type: 'gold', value: 30, collected: false });
     }
   }
 
@@ -128,6 +199,9 @@ function getBossType(stageNum) {
   switch (stageNum) {
     case 1: return 'death';
     case 2: return 'mushroomKing';
+    case 3: return 'dragon';
+    case 4: return 'mechDragon';
+    case 5: return 'vampireLord';
     default: return 'dragon';
   }
 }

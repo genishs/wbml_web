@@ -215,7 +215,6 @@ export class Player {
 
     if (this.invincible > 0 && Math.floor(this.invincible / 6) % 2 === 0) return;
 
-    // 장비 단계 캐시
     this._appearanceStage = getPlayerAppearanceStage(this);
 
     const frameImg = this._getAnimFrame();
@@ -231,20 +230,27 @@ export class Player {
       ctx.translate(px, py);
     }
 
+    const isMoving = Math.abs(this.vx) > 0.5;
+    let bobY = 0;
+    if (isMoving && this.onGround && !this.attacking && this.frame === 1) {
+      bobY = 1;
+    }
+    
+    ctx.translate(0, bobY);
+
     if (frameImg) {
       ctx.drawImage(frameImg, 0, 0, this.w, this.h);
     } else {
-      // 최후 fallback: 색상 박스
       ctx.fillStyle = '#f0c040';
       ctx.fillRect(0, 0, this.w, this.h);
     }
 
-    this.drawEquipment(ctx, appearance);
+    this.drawEquipment(ctx, appearance, sprites);
 
     ctx.restore();
   }
 
-  drawEquipment(ctx, appearance) {
+  drawEquipment(ctx, appearance, sprites) {
     const armorImg = appearance.armor ? assets.items[appearance.armor] : null;
     if (armorImg) {
       ctx.drawImage(armorImg, 5, 6, 14, 14);
@@ -260,13 +266,24 @@ export class Player {
       ctx.drawImage(shieldImg, -7, 5, 11, 14);
     }
 
-    const swordImg = appearance.sword ? assets.items[appearance.sword] : null;
+    let swordImg = null;
+    if (appearance.sword && sprites && sprites.weapons && sprites.weapons[appearance.sword]) {
+        swordImg = sprites.weapons[appearance.sword];
+    } else if (appearance.sword) {
+        swordImg = assets.items[appearance.sword];
+    }
+
     if (swordImg) {
+      ctx.save();
       if (this.attacking) {
-        ctx.drawImage(swordImg, 10, 5, 18, 11);
+        ctx.translate(14, 12);
+        ctx.drawImage(swordImg, 0, -4, 18, 8);
       } else {
-        ctx.drawImage(swordImg, 9, 8, 13, 8);
+        ctx.translate(10, 10);
+        ctx.rotate(-Math.PI / 2.2);
+        ctx.drawImage(swordImg, 0, -4, 18, 8);
       }
+      ctx.restore();
     }
   }
 }
