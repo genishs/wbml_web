@@ -1,29 +1,35 @@
-export const CANVAS_WIDTH = 640;
-export const CANVAS_HEIGHT = 360;
-export const TILE_SIZE = 32;
-export const GRAVITY = 0.5;
-export const JUMP_FORCE = -11;
-export const PLAYER_SPEED = 3;
+export const CANVAS_W = 640;
+export const CANVAS_H = 360;
+export const HUD_W = 112;        // 왼쪽 HUD 너비
+export const VIEW_W = 528;       // 실제 게임 뷰포트 너비
+export const VIEW_H = 360;
 
-export const COLORS = {
-  sky: '#5c94fc',
-  ground: '#a07040',
-  groundTop: '#68a840',
-  player: '#f0c040',
-  playerSword: '#c0c0c0',
-  enemy: '#e04040',
-  gold: '#ffd700',
-  heart: '#ff4444',
-  heartEmpty: '#440000',
-  ui: '#1a1a1a',
-  uiText: '#ffffff',
-  shop: '#8040c0',
-};
+export const GRAVITY = 0.45;
+export const JUMP_FORCE = -10;
+export const PLAYER_SPEED = 2.2;
+
+export const GROUND_Y = 300;     // 지면 y좌표 (발이 닿는 위치)
 
 export const GAME_STATE = {
-  TITLE: 'title',
-  PLAYING: 'playing',
-  SHOP: 'shop',
-  GAME_OVER: 'gameover',
+  TITLE:       'title',
+  PLAYING:     'playing',
+  SHOP:        'shop',
+  GAME_OVER:   'gameover',
   STAGE_CLEAR: 'stageclear',
+  PAUSE:       'pause',
+};
+
+export const COLORS = {
+  sky:         '#5c94fc',
+  cloud:       '#ffffff',
+  ground:      '#a07040',
+  groundTop:   '#50a830',
+  hudBg:       '#000000',
+  hudBorder:   '#888888',
+  gold:        '#ffd700',
+  heart:       '#e81020',
+  heartEmpty:  '#600000',
+  text:        '#ffffff',
+  shopDoor:    '#8040c0',
+  bossDoor:    '#800000',
 };

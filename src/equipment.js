@@ -1,197 +1,60 @@
+export const SWORD = {
+  none:      { id: 'none',     name: '없음',          atk: 0,  reach: 0,  cost: 0,    bladeColor: null,     guardColor: null },
+  gradius:   { id: 'gradius',  name: '그라디우스',     atk: 2,  reach: 14, cost: 50,   bladeColor: '#a8c8f0', guardColor: '#c0a020' },
+  broad:     { id: 'broad',    name: '브로드소드',     atk: 4,  reach: 18, cost: 150,  bladeColor: '#c8c8d8', guardColor: '#c0a020' },
+  great:     { id: 'great',    name: '그레이트소드',   atk: 6,  reach: 22, cost: 350,  bladeColor: '#d8d8e8', guardColor: '#d0b020' },
+  excalibur: { id: 'excalibur',name: '엑스칼리버',     atk: 9,  reach: 26, cost: 800,  bladeColor: '#ffe080', guardColor: '#d0a010' },
+  legend:    { id: 'legend',   name: '레전드소드',     atk: 14, reach: 30, cost: 2000, bladeColor: '#ff88ff', guardColor: '#ff4080' },
+};
+
+export const SHIELD = {
+  none:   { id: 'none',   name: '없음',        def: 0,  block: 0.0, cost: 0,    bodyColor: null,     rimColor: null },
+  light:  { id: 'light',  name: '라이트 방패',  def: 5,  block: 0.3, cost: 80,   bodyColor: '#b8c8d8', rimColor: '#808898' },
+  knight: { id: 'knight', name: '나이트 방패',  def: 10, block: 0.5, cost: 200,  bodyColor: '#6080b8', rimColor: '#405080' },
+  heavy:  { id: 'heavy',  name: '무거운 방패',  def: 15, block: 0.7, cost: 500,  bodyColor: '#506070', rimColor: '#304050' },
+  legend: { id: 'legend', name: '전설의 방패',  def: 20, block: 0.9, cost: 1500, bodyColor: '#e8d050', rimColor: '#c0a020' },
+};
+
+export const ARMOR = {
+  none:   { id: 'none',   name: '없음',        def: 0,  cost: 0,    bodyColor: null,     helmetColor: null,    trimColor: null },
+  light:  { id: 'light',  name: '라이트 갑옷',  def: 5,  cost: 60,   bodyColor: '#d0dce8', helmetColor: '#c0ccd8', trimColor: '#9098a8' },
+  knight: { id: 'knight', name: '나이트 갑옷',  def: 12, cost: 180,  bodyColor: '#d8b840', helmetColor: '#c0a030', trimColor: '#907010' },
+  heavy:  { id: 'heavy',  name: '무거운 갑옷',  def: 20, cost: 400,  bodyColor: '#a07840', helmetColor: '#906830', trimColor: '#604020' },
+  hard:   { id: 'hard',   name: '단단한 갑옷',  def: 28, cost: 900,  bodyColor: '#5870a0', helmetColor: '#486090', trimColor: '#304060' },
+  legend: { id: 'legend', name: '전설의 갑옷',  def: 38, cost: 2000, bodyColor: '#e8e8e0', helmetColor: '#d8d8d0', trimColor: '#8090c0' },
+};
+
+export const BOOTS = {
+  none:    { id: 'none',    name: '없음',       speed: 0,   jump: 0,   cost: 0,    color: null },
+  cloth:   { id: 'cloth',   name: '천 부츠',    speed: 0.3, jump: 0.5, cost: 40,   color: '#c8a060' },
+  leather: { id: 'leather', name: '가죽 부츠',  speed: 0.6, jump: 1.0, cost: 120,  color: '#7a4820' },
+  ceramic: { id: 'ceramic', name: '세라믹 부츠', speed: 1.0, jump: 1.5, cost: 350,  color: '#5060b0' },
+  legend:  { id: 'legend',  name: '전설의 부츠', speed: 1.5, jump: 2.5, cost: 1200, color: '#e03020' },
+};
+
 export const SHOP_TYPE = {
-  STARTER_GIFT: 'starter_gift',
-  SHIELD: 'shield',
-  ARMOR: 'armor',
-  BOOTS: 'boots',
   WEAPON: 'weapon',
+  SHIELD: 'shield',
+  ARMOR:  'armor',
+  BOOTS:  'boots',
 };
 
-export const SHOP_ITEMS = [
-  {
-    id: 'knife',
-    slot: 'sword',
-    tier: 0,
-    label: 'KNIFE',
-    cost: 0,
-    desc: '기본 칼. 상인에게서 무료로 받는다',
-    iconKey: 'sword',
-    appearanceKey: 'sword',
-    stageValue: 0,
-    bonuses: { attack: 1, range: 6 },
-  },
-  {
-    id: 'broad_sword',
-    slot: 'sword',
-    tier: 1,
-    label: 'BROAD SWORD',
-    cost: 50,
-    desc: '공격력 +1, 사거리 증가',
-    iconKey: 'swordBroad',
-    appearanceKey: 'swordBroad',
-    stageValue: 2,
-    bonuses: { attack: 1, range: 16 },
-  },
-  {
-    id: 'gradius',
-    slot: 'sword',
-    tier: 2,
-    label: 'GRADIUS',
-    cost: 150,
-    desc: '공격력 +2, 사거리 대폭 증가',
-    iconKey: 'swordGradius',
-    appearanceKey: 'swordGradius',
-    stageValue: 2,
-    bonuses: { attack: 2, range: 26 },
-  },
-  {
-    id: 'great_sword',
-    slot: 'sword',
-    tier: 3,
-    label: 'GREAT SWORD',
-    cost: 300,
-    desc: '공격력 +3, 광역 사거리',
-    iconKey: 'swordGreat',
-    appearanceKey: 'swordGreat',
-    stageValue: 2,
-    bonuses: { attack: 3, range: 36 },
-  },
-  {
-    id: 'excalibur',
-    slot: 'sword',
-    tier: 4,
-    label: 'EXCALIBUR',
-    cost: 600,
-    desc: '공격력 +4, 성스러운 검',
-    iconKey: 'swordExcalibur',
-    appearanceKey: 'swordExcalibur',
-    stageValue: 2,
-    bonuses: { attack: 4, range: 46 },
-  },
-  {
-    id: 'legend_sword',
-    slot: 'sword',
-    tier: 5,
-    label: 'SWORD OF LEGEND',
-    cost: 999,
-    desc: '최강의 검. 전설의 영웅만이 다룰 수 있다',
-    iconKey: 'swordLegend',
-    appearanceKey: 'swordLegend',
-    stageValue: 2,
-    bonuses: { attack: 6, range: 60 },
-  },
-  {
-    id: 'shield',
-    slot: 'shield',
-    tier: 1,
-    label: 'SHIELD',
-    cost: 40,
-    desc: '기본 방패',
-    iconKey: 'shield',
-    appearanceKey: 'shield',
-    stageValue: 1,
-    bonuses: {},
-  },
-  {
-    id: 'armor',
-    slot: 'armor',
-    tier: 1,
-    label: 'ARMOR',
-    cost: 80,
-    desc: '피해 감소 +1',
-    iconKey: 'armor',
-    appearanceKey: 'armor',
-    stageValue: 1,
-    bonuses: { defense: 1 },
-  },
-  {
-    id: 'boots',
-    slot: 'boots',
-    tier: 1,
-    label: 'BOOTS',
-    cost: 60,
-    desc: '이동속도 증가',
-    iconKey: 'boots',
-    appearanceKey: 'boots',
-    stageValue: 1,
-    bonuses: { speedMultiplier: 1.4 },
-  },
-];
-
-export const REFERENCE_EQUIPMENT = {
-  swords: [
-    { key: 'sword', label: 'KNIFE' },
-    { key: 'swordBroad', label: 'BROAD SWORD' },
-    { key: 'swordGradius', label: 'GRADIUS' },
-    { key: 'swordExcalibur', label: 'EXCALIBUR' },
-    { key: 'swordLegend', label: 'SWORD OF LEGEND' },
-  ],
-  shields: [{ key: 'shield', label: 'SHIELD' }],
-  armors: [{ key: 'armor', label: 'ARMOR' }],
-  boots: [{ key: 'boots', label: 'BOOTS' }],
-};
-
-const SHOP_ITEM_MAP = Object.fromEntries(SHOP_ITEMS.map(item => [item.id, item]));
-
-const SHOP_TYPE_TO_SLOT = {
-  [SHOP_TYPE.SHIELD]: 'shield',
-  [SHOP_TYPE.ARMOR]: 'armor',
-  [SHOP_TYPE.BOOTS]: 'boots',
-  [SHOP_TYPE.WEAPON]: 'sword',
-};
-
-export function getShopItem(id) {
-  return SHOP_ITEM_MAP[id] || null;
-}
-
-export function getOwnedShopItems(player) {
-  return Object.values(player.equipment)
-    .filter(Boolean)
-    .map(getShopItem)
-    .filter(Boolean);
-}
-
-export function getEquipmentAppearanceKeys(player) {
-  return {
-    sword: getShopItem(player.equipment.sword)?.appearanceKey || null,
-    shield: getShopItem(player.equipment.shield)?.appearanceKey || null,
-    armor: getShopItem(player.equipment.armor)?.appearanceKey || null,
-    boots: getShopItem(player.equipment.boots)?.appearanceKey || null,
-  };
-}
-
-export function getPlayerAppearanceStage(player) {
-  const stageScore = getOwnedShopItems(player).reduce((sum, item) => sum + (item.stageValue || 0), 0);
-  return Math.min(stageScore, 5);
-}
-
-export function getCurrentTier(player, slot) {
-  const item = getShopItem(player.equipment[slot]);
-  return item?.tier ?? -1;
-}
-
-export function getShopItemsForType(shopType, player) {
-  if (shopType === SHOP_TYPE.STARTER_GIFT) {
-    return player.equipment.sword ? [] : [getShopItem('knife')];
-  }
-
-  const slot = SHOP_TYPE_TO_SLOT[shopType];
-  if (!slot) return [];
-
-  const currentTier = getCurrentTier(player, slot);
-  return SHOP_ITEMS.filter(item =>
-    item.slot === slot &&
-    item.tier > currentTier &&
-    item.id !== 'knife'
-  ).sort((a, b) => a.tier - b.tier);
-}
-
-export function getShopTitle(shopType) {
+export function getShopItems(shopType, player) {
+  const eq = player.eq;
   switch (shopType) {
-    case SHOP_TYPE.STARTER_GIFT: return '* SWORD GIFT *';
-    case SHOP_TYPE.SHIELD: return '* SHIELD SHOP *';
-    case SHOP_TYPE.ARMOR: return '* ARMOR SHOP *';
-    case SHOP_TYPE.BOOTS: return '* BOOTS SHOP *';
-    case SHOP_TYPE.WEAPON: return '* WEAPON SHOP *';
-    default: return '* SHOP *';
+    case SHOP_TYPE.WEAPON:
+      return Object.values(SWORD).filter(i => i.id !== 'none' && i.atk > (eq.sword?.atk ?? 0));
+    case SHOP_TYPE.SHIELD:
+      return Object.values(SHIELD).filter(i => i.id !== 'none' && i.def > (eq.shield?.def ?? 0));
+    case SHOP_TYPE.ARMOR:
+      return Object.values(ARMOR).filter(i => i.id !== 'none' && i.def > (eq.armor?.def ?? 0));
+    case SHOP_TYPE.BOOTS:
+      return Object.values(BOOTS).filter(i => i.id !== 'none' && i.speed > (eq.boots?.speed ?? 0));
+    default:
+      return [];
   }
+}
+
+export function shopTypeName(shopType) {
+  return { weapon: '무기 상점', shield: '방패 상점', armor: '갑옷 상점', boots: '신발 상점' }[shopType] || '상점';
 }

@@ -1,427 +1,295 @@
-// Pixel art sprites recreated in Wonder Boy in Monster Land style
-// Based on the original arcade / Sega Master System art (1987, Sega)
+// Wonder Boy 캐릭터 픽셀아트 렌더러
+// native 16w×26h  →  scale S=3  →  48×78px on canvas
+//
+// 정지: 3/4 뷰 (방향은 있지만 살짝 관람자를 향함)
+// 이동/공격/점프: 완전 측면 프로필
 
-// Palette: index ??CSS color (null = transparent)
-// Accessed via parseInt(char, 36): '0'-'9' = 0-9, 'a'-'z' = 10-35
-const P = [
-  null,        // 0  transparent
-  '#F8B068',   // 1  skin
-  '#5C2810',   // 2  dark brown (helmet)
-  '#F0A010',   // 3  yellow tunic
-  '#401808',   // 4  dark brown boots/belt
-  '#8C4820',   // 5  mid brown (helmet shading)
-  '#101010',   // 6  near-black (eyes/outline)
-  '#D0D0C0',   // 7  silver (sword)
-  '#C81818',   // 8  red (scarf / goblin torso)
-  '#FFD030',   // 9  gold (belt buckle)
-  '#30A830',   // a  green (slime)
-  '#60D060',   // b  light green (slime highlight)
-  '#0C400C',   // c  dark green (unused / shadow)
-  '#E06018',   // d  orange (goblin skin)
-  '#983008',   // e  dark orange (goblin shadow)
-  '#3858A8',   // f  blue (knight armor)
-  '#202868',   // g  dark blue (knight shadow)
-  '#7898E0',   // h  light blue (knight highlight)
-  '#B02020',   // i  dragon red
-  '#701010',   // j  dragon dark red
-  '#FF8000',   // k  bright orange (fire)
-];
+export const CHAR_W = 16;
+export const CHAR_H = 26;
+export const S      = 3;   // 해상도 배율
 
-function make(rows) {
-  const h = rows.length, w = rows[0].length;
-  const cv = document.createElement('canvas');
-  cv.width = w; cv.height = h;
-  const cx = cv.getContext('2d');
-  rows.forEach((row, y) => {
-    for (let x = 0; x < row.length; x++) {
-      const color = P[parseInt(row[x], 36)];
-      if (color) { cx.fillStyle = color; cx.fillRect(x, y, 1, 1); }
+// ─── 팔레트 ────────────────────────────────────────────
+const SKIN    = '#f4a060';
+const SKIN_S  = '#d07840';   // 그림자
+const HAIR    = '#f0c800';
+const HAIR_H  = '#fff080';   // 하이라이트
+const EYE     = '#181818';
+const MOUTH   = '#b04828';
+const WHITE   = '#f0f0f0';
+const HANDLE  = '#804020';
+const HANDLE_S= '#5a2c10';
+const OUTLINE = '#201008';
+
+// ─── 유틸 ───────────────────────────────────────────────
+function r(ctx, x, y, w, h, col) {
+  if (!col || w <= 0 || h <= 0) return;
+  ctx.fillStyle = col;
+  ctx.fillRect(x * S, y * S, w * S, h * S);
+}
+function px(ctx, x, y, col) { r(ctx, x, y, 1, 1, col); }
+
+// ─── 진입점 ─────────────────────────────────────────────
+export function drawWonderBoy(ctx, { facing, state, animFrame, eq }) {
+  ctx.save();
+  if (facing === -1) {
+    ctx.translate(CHAR_W * S, 0);
+    ctx.scale(-1, 1);
+  }
+
+  if (state === 'idle') {
+    _drawIdle(ctx, eq);
+  } else {
+    _drawSide(ctx, eq, state, animFrame);
+  }
+
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════
+// 정지 — 3/4 뷰 (오른쪽 방향 기준으로 설계, 왼쪽은 flip)
+// ═══════════════════════════════════════════════════════
+function _drawIdle(ctx, eq) {
+  const { ac, hc, ht, bc, hasSword, hasShield } = _colors(eq);
+
+  // ── 뒤쪽 레이어: 칼 (왼손, 세워 들기) ──
+  if (hasSword) _swordUpright(ctx, eq.sword, 0, 3);
+
+  // ── 다리 (3/4 뷰 — 두 다리 모두 살짝 벌림) ──
+  r(ctx, 3, 17, 4, 7, SKIN);        // 왼다리 (뒤)
+  r(ctx, 3, 17, 4, 7, SKIN_S);      // 음영
+  r(ctx, 3, 17, 4, 7, SKIN);        // 재덮어쓰기(명도)
+  r(ctx, 4, 17, 3, 7, SKIN);        // 왼다리
+  r(ctx, 9, 17, 4, 7, SKIN);        // 오른다리 (앞)
+  // 발/부츠
+  r(ctx, 3, 23, 5, 2, bc);
+  r(ctx, 8, 23, 6, 2, bc);
+  if (bc !== SKIN_S) {
+    r(ctx, 4, 22, 3, 1, bc);
+    r(ctx, 9, 22, 4, 1, bc);
+  }
+
+  // ── 몸통 ──
+  r(ctx, 3, 9, 9, 8, ac ?? SKIN);
+  r(ctx, 3, 15, 9, 3, WHITE);
+  if (ac) {
+    r(ctx, 3, 15, 9, 2, ac);
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.fillRect(4*S, 10*S, 8*S, S);   // 가슴 하이라이트
+    r(ctx, 3, 10, 1, 6, ht);            // 왼 트림
+    r(ctx, 11, 10, 1, 6, ht);           // 오른 트림
+    // 흉갑 중앙 음각
+    r(ctx, 6, 11, 3, 4, ac);
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(6*S, 12*S, 3*S, 2*S);
+  }
+
+  // ── 왼팔 (뒤) ──
+  r(ctx, 1, 10, 3, 5, SKIN);
+  r(ctx, 1, 14, 3, 1, SKIN_S);  // 손
+
+  // ── 오른팔 (앞, 방패 or 빈팔) ──
+  r(ctx, 12, 10, 3, 5, SKIN);
+  if (hasShield) {
+    _shieldIdle(ctx, eq.shield);
+  } else {
+    r(ctx, 12, 14, 3, 1, SKIN_S);
+  }
+
+  // ── 목 ──
+  r(ctx, 6, 8, 4, 2, ac ?? SKIN);
+
+  // ── 머리 (3/4 뷰, 오른쪽 약간 앞) ──
+  // 머리카락 전체
+  r(ctx, 2, 0, 11, 5, HAIR);
+  r(ctx, 3, 0, 9,  2, HAIR_H);   // 하이라이트
+  // 얼굴 (오른쪽으로 약간 치우친 타원)
+  r(ctx, 3, 2, 9, 7, SKIN);
+  r(ctx, 2, 3, 1, 5, SKIN);      // 왼쪽 귀
+  r(ctx, 12, 3, 1, 3, SKIN);     // 오른쪽 귀 (살짝만)
+  // 눈 — 오른눈(앞)이 더 크고 오른쪽에, 왼눈(뒤)이 더 안쪽
+  r(ctx, 5, 3, 2, 2, EYE);       // 왼눈 (2×2)
+  r(ctx, 9, 3, 2, 2, EYE);       // 오른눈 (2×2, 앞눈)
+  // 눈 흰자
+  px(ctx, 5, 3, '#ffffff');
+  px(ctx, 9, 3, '#ffffff');
+  // 코 힌트 (오른쪽 방향으로 돌출)
+  px(ctx, 11, 5, SKIN_S);
+  // 입 (오른쪽 방향 쪽으로 약간 치우침)
+  r(ctx, 7, 7, 4, 1, MOUTH);
+  // 눈썹
+  r(ctx, 5, 2, 2, 1, HAIR);
+  r(ctx, 9, 2, 2, 1, HAIR);
+
+  if (hc) _helmetFront(ctx, hc, ht);
+}
+
+// ═══════════════════════════════════════════════════════
+// 이동/공격/점프/넉백 — 완전 측면 프로필
+// ═══════════════════════════════════════════════════════
+function _drawSide(ctx, eq, state, frame) {
+  const { ac, hc, ht, bc, hasSword, hasShield } = _colors(eq);
+  const isAttack = state === 'attack';
+  const isJump   = state === 'jump';
+  const isKnock  = state === 'knockback';
+
+  // 다리 교대 위치
+  let frontX, backX, frontY, backY;
+  if (isJump) {
+    frontX = 8; backX = 5; frontY = 3; backY = 1;
+  } else if (isKnock) {
+    frontX = 10; backX = 3; frontY = -2; backY = -2;
+  } else if (isAttack) {
+    frontX = 7; backX = 5; frontY = 0; backY = 0;
+  } else {
+    // 걷기: 프레임 0→오른발 앞, 프레임 1→왼발 앞
+    const step = frame % 2;
+    frontX = step === 0 ? 9 : 4;
+    backX  = step === 0 ? 4 : 9;
+    frontY = 0; backY = 0;
+  }
+
+  // ── 뒤 다리 ──
+  r(ctx, backX, 17 + backY, 3, 7, SKIN_S);
+  r(ctx, backX-1, 23 + backY, 4, 2, bc);   // 뒤 발
+
+  // ── 뒤 팔 or 칼 ──
+  if (!isAttack) {
+    r(ctx, 2, 10, 2, 5, SKIN);
+    if (hasSword) _swordUpright(ctx, eq.sword, 0, 8);
+  }
+
+  // ── 몸통 (측면 — 좌우 폭 좁게) ──
+  r(ctx, 4, 9, 7, 8, ac ?? SKIN);
+  r(ctx, 4, 15, 7, 3, WHITE);
+  if (ac) {
+    r(ctx, 4, 15, 7, 2, ac);
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.fillRect(5*S, 10*S, 6*S, S);
+    r(ctx, 3, 10, 1, 6, ht);
+    r(ctx, 11, 10, 1, 6, ht);
+  }
+
+  // ── 앞 다리 ──
+  r(ctx, frontX, 17 + frontY, 3, 7, SKIN);
+  r(ctx, frontX, 23 + frontY, 4, 2, bc);   // 앞 발
+
+  // ── 앞 팔 ──
+  if (isAttack) {
+    r(ctx, 9, 10, 5, 2, SKIN);        // 뻗은 팔
+    _swordThrust(ctx, eq.sword);
+    if (hasShield) {
+      r(ctx, 2, 10, 4, 5, eq.shield.bodyColor);  // 방패 뒤로
+      r(ctx, 2, 10, 4, 5, eq.shield.bodyColor);
     }
-  });
-  return cv;
-}
-
-// ?�?� PLAYER (16 × 24) ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
-// Facing right by default; flip horizontally when facing left.
-
-const PLAYER_W1 = make([   // walk / stand frame 1
-  '0000222200000000',
-  '0002522520000000',
-  '0002555520000000',
-  '0001111100000000',
-  '0001611600000000',
-  '0001111100000000',
-  '0088888880000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0049494940000000',
-  '0033443300000000',
-  '0033443300000000',
-  '0034400440000000',
-  '0044400440000000',
-  '0044400440000000',
-  '0044500450000000',
-  '0044400440000000',
-  '0044400440000000',
-  '0044000440000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-const PLAYER_W2 = make([   // walk frame 2 (legs alternated)
-  '0000222200000000',
-  '0002522520000000',
-  '0002555520000000',
-  '0001111100000000',
-  '0001611600000000',
-  '0001111100000000',
-  '0088888880000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0049494940000000',
-  '0033443300000000',
-  '0033443300000000',
-  '0004403440000000',
-  '0004403440000000',
-  '0004403440000000',
-  '0005403450000000',
-  '0004403440000000',
-  '0004403440000000',
-  '0004400440000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-const PLAYER_ATK = make([  // attack (sword extended right)
-  '0000222200000000',
-  '0002522520000000',
-  '0002555520000000',
-  '0001111100000000',
-  '0001611600000000',
-  '0001111100000000',
-  '0088888880000000',
-  '0033333337777770',
-  '0033333337000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0049494940000000',
-  '0033443300000000',
-  '0033443300000000',
-  '0034400440000000',
-  '0044400440000000',
-  '0044400440000000',
-  '0044500450000000',
-  '0044400440000000',
-  '0044400440000000',
-  '0044000440000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-// ?�?� SLIME (16 × 12) ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
-
-const SLIME_1 = make([   // normal
-  '0000aaaa00000000',
-  '000aaaaaaa000000',
-  '00aaabbaabaa0000',
-  '0aaab6aab6aaa000',
-  '0aaababababaa000',
-  '0aaaaaaaaabaa000',
-  '0aaaaaaaaaa00000',
-  '00aaaaaaaaa00000',
-  '000aaaaaaa000000',
-  '0000aaaaaa000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-const SLIME_2 = make([   // squished (bounce)
-  '0000000000000000',
-  '0000000000000000',
-  '00aaaaaaaaaaaa00',
-  '0aaab6aaab6aaaa0',
-  '0aaababababaaa00',
-  '0aaaaaaaaaaaaa00',
-  '00aaaaaaaaaa0000',
-  '0000aaaaaa000000',
-  '0000000000000000',
-  '0000000000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-// ?�?� GOBLIN (16 × 20) ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
-
-const GOBLIN_1 = make([  // stand
-  '00000ddddd000000',
-  '0000dde66edd0000',
-  '0000dddddddd0000',
-  '0000dddedeed0000',
-  '0000edddddde0000',
-  '0000e8888ee00000',
-  '0000888888000000',
-  '0000888888000000',
-  '0000888888000000',
-  '0004944494000000',
-  '0004488884000000',
-  '0004488884000000',
-  '0000480048000000',
-  '0000480048000000',
-  '0000440044000000',
-  '0000440044000000',
-  '0000440044000000',
-  '0000000000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-const GOBLIN_2 = make([  // walk (arm raised)
-  '00000ddddd000000',
-  '0000dde66edd0000',
-  '0000dddddddd0000',
-  '0000dddedeed0000',
-  '0000edddddde0000',
-  '0000e8888ee00000',
-  '0888888888000000',
-  '0088888888000000',
-  '0000888888000000',
-  '0004944494000000',
-  '0004488884000000',
-  '0004488884000000',
-  '0000048048000000',
-  '0000048048000000',
-  '0000044044000000',
-  '0000044044000000',
-  '0000044044000000',
-  '0000000000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-// ?�?� KNIGHT (16 × 24) ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
-
-const KNIGHT_1 = make([  // stand
-  '0000ffffff000000',
-  '000ffffffhf00000',
-  '000fgggggff00000',
-  '000fg6g6gff00000',
-  '000fffffffh00000',
-  '0000f777ff000000',
-  '00fffffffff00000',
-  '00fhffhffff00000',
-  '00fffffffff00000',
-  '00fffffffff00000',
-  '0007ffffff700000',
-  '000ffgffgff00000',
-  '000ffgffgff00000',
-  '000ffgffgff00000',
-  '000fg0ff0gf00000',
-  '0000g0ff0g000000',
-  '0000g0ff0g000000',
-  '0000g0ff0g000000',
-  '0000ggffgg000000',
-  '0000ggffgg000000',
-  '0000ggffgg000000',
-  '000ggggggg000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-const KNIGHT_2 = make([  // walk (arm raised)
-  '0000ffffff000000',
-  '000ffffffhf00000',
-  '000fgggggff00000',
-  '000fg6g6gff00000',
-  '000fffffffh00000',
-  '0000f777ff000000',
-  '0ffffffffffh0000',
-  '0ffhffhfffff0000',
-  '00fffffffff00000',
-  '00fffffffff00000',
-  '0007ffffff700000',
-  '000ffgffgff00000',
-  '000ffgffgff00000',
-  '000ffgffgff00000',
-  '0000fg0gff000000',
-  '0000fg0gff000000',
-  '0000fg0gff000000',
-  '0000fg0gff000000',
-  '0000ffgff0000000',
-  '0000ffgff0000000',
-  '0000ffgff0000000',
-  '0000ggggg0000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-// ?�?� DRAGON (48 × 40, boss) ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
-// Drawn programmatically; faces LEFT by default.
-
-function makeDragon(frame) {
-  const cv = document.createElement('canvas');
-  cv.width = 48; cv.height = 40;
-  const ctx = cv.getContext('2d');
-
-  // Body
-  ctx.fillStyle = '#B02020';
-  ctx.fillRect(12, 12, 32, 18);
-
-  // Belly (lighter)
-  ctx.fillStyle = '#D04040';
-  ctx.fillRect(14, 18, 28, 12);
-
-  // Head (left side, faces left)
-  ctx.fillStyle = '#C03030';
-  ctx.fillRect(2, 6, 16, 16);
-
-  // Upper jaw / snout
-  ctx.fillStyle = '#B02020';
-  ctx.fillRect(0, 6, 6, 8);
-
-  // Lower jaw (open mouth area)
-  ctx.fillStyle = '#801010';
-  ctx.fillRect(0, 14, 8, 6);
-
-  // Teeth
-  ctx.fillStyle = '#F0F0E0';
-  ctx.fillRect(1, 13, 2, 3);
-  ctx.fillRect(4, 13, 2, 3);
-
-  // Eye
-  ctx.fillStyle = '#FFD030';
-  ctx.fillRect(6, 8, 5, 5);
-  ctx.fillStyle = '#101010';
-  ctx.fillRect(7, 9, 3, 3);
-
-  // Dorsal spikes
-  ctx.fillStyle = '#901010';
-  const spikeY = frame === 1 ? 1 : 0;
-  for (let i = 0; i < 4; i++) {
-    const sx = 16 + i * 8;
-    ctx.fillRect(sx + 1, spikeY, 2, 10);
-    ctx.fillRect(sx,     spikeY + 4, 4, 6);
+  } else {
+    r(ctx, 11, 10, 2, 5, SKIN);
+    if (hasShield) _shieldSide(ctx, eq.shield);
   }
 
-  // Tail (right side)
-  ctx.fillStyle = '#901818';
-  ctx.fillRect(40, 20, 8, 8);
-  ctx.fillStyle = '#701010';
-  ctx.fillRect(44, 26, 4, 6);
-  ctx.fillRect(46, 30, 2, 4);
+  // ── 목 ──
+  r(ctx, 5, 8, 4, 2, ac ?? SKIN);
 
-  // Legs
-  const legOff = frame === 0 ? 0 : 2;
-  ctx.fillStyle = '#901818';
-  ctx.fillRect(16, 30 - legOff, 8, 10);
-  ctx.fillRect(28, 30 + legOff, 8, Math.max(6, 10 - legOff));
+  // ── 머리 — 완전 측면 프로필 ──
+  r(ctx, 2, 0, 9, 5, HAIR);
+  r(ctx, 3, 0, 7, 2, HAIR_H);
+  r(ctx, 3, 2, 7, 7, SKIN);
+  // 코 (오른쪽 돌출)
+  r(ctx, 10, 4, 2, 2, SKIN);
+  px(ctx, 10, 5, SKIN_S);
+  // 눈 (앞쪽에 하나만)
+  r(ctx, 8, 3, 2, 2, EYE);
+  px(ctx, 8, 3, '#ffffff');
+  // 귀 (뒤쪽)
+  r(ctx, 2, 3, 1, 3, SKIN);
+  // 입
+  r(ctx, 7, 7, 3, 1, MOUTH);
+  // 눈썹
+  r(ctx, 8, 2, 2, 1, HAIR);
 
-  // Claws
-  ctx.fillStyle = '#E8D000';
-  ctx.fillRect(15, 38, 3, 2);
-  ctx.fillRect(19, 38, 3, 2);
-  ctx.fillRect(27, 36 + legOff, 3, 2);
-  ctx.fillRect(31, 36 + legOff, 3, 2);
-
-  // Fire breath (frame 1)
-  if (frame === 1) {
-    ctx.fillStyle = '#FF8000';
-    ctx.fillRect(0, 15, 8, 5);
-    ctx.fillStyle = '#FFD030';
-    ctx.fillRect(0, 16, 5, 3);
-  }
-
-  return cv;
+  if (hc) _helmetSide(ctx, hc, ht);
 }
 
-// ?�?� Export ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+// ─── 헬멧 ────────────────────────────────────────────
+function _helmetFront(ctx, hc, ht) {
+  r(ctx, 1, -1, 13, 5, hc);
+  r(ctx, 1, 4, 2, 5, hc);    // 왼 볼가드
+  r(ctx, 12, 4, 2, 5, hc);   // 오른 볼가드
+  r(ctx, 3, 3, 9, 3, 'rgba(0,10,50,0.55)');  // 바이저 슬롯
+  ctx.fillStyle = 'rgba(255,255,255,0.38)';
+  ctx.fillRect(2*S, 0, 9*S, S);
+  if (ht) { r(ctx, 1, 3, 13, 1, ht); r(ctx, 1, 8, 13, 1, ht); }
+}
 
+function _helmetSide(ctx, hc, ht) {
+  r(ctx, 1, -1, 10, 5, hc);
+  r(ctx, 1, 4, 2, 5, hc);    // 뒤 볼가드
+  r(ctx, 3, 3, 7, 3, 'rgba(0,10,50,0.55)');
+  ctx.fillStyle = 'rgba(255,255,255,0.38)';
+  ctx.fillRect(2*S, 0, 7*S, S);
+  if (ht) { r(ctx, 1, 3, 10, 1, ht); r(ctx, 1, 8, 10, 1, ht); }
+}
 
-const SWORD = make([
-  '0000000000000000',
-  '0000000000000000',
-  '0000777770000000',
-  '0062777777700000',
-  '0000777770000000',
-  '0000000000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
+// ─── 방패 ────────────────────────────────────────────
+function _shieldIdle(ctx, shield) {
+  const bc = shield.bodyColor, rc = shield.rimColor;
+  r(ctx, 13, 9, 4, 7, bc);
+  r(ctx, 12, 10, 1, 5, bc);
+  r(ctx, 13, 9, 4, 1, rc);
+  r(ctx, 13, 15, 4, 1, rc);
+  r(ctx, 16, 9, 1, 7, rc);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.fillRect(13*S, 10*S, S, 3*S);
+  if (shield.id === 'legend') {
+    r(ctx, 17, 10, 2, 2, '#ffe0a0');
+    r(ctx, 17, 13, 2, 2, '#ffe0a0');
+  }
+}
 
-const SWORD_BROAD = make([
-  '0000000000000000',
-  '0000007777700000',
-  '0000077777770000',
-  '0067777777777000',
-  '0000077777770000',
-  '0000007777700000',
-  '0000000000000000',
-  '0000000000000000',
-]);
+function _shieldSide(ctx, shield) {
+  const bc = shield.bodyColor, rc = shield.rimColor;
+  r(ctx, 12, 9, 4, 7, bc);
+  r(ctx, 12, 9, 4, 1, rc);
+  r(ctx, 12, 15, 4, 1, rc);
+  r(ctx, 15, 9, 1, 7, rc);
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillRect(12*S, 10*S, S, 3*S);
+}
 
-const SWORD_GRADIUS = make([
-  '0000000000000000',
-  '0000220000000000',
-  '0000277777700000',
-  '0022277777777000',
-  '0000277777700000',
-  '0000220000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
+// ─── 칼 ──────────────────────────────────────────────
+function _swordUpright(ctx, sword, x, guardY) {
+  if (!sword || !sword.bladeColor) return;
+  const blen = Math.max(5, Math.round(sword.reach * 0.52));
+  r(ctx, x,   guardY - blen, 1, blen, sword.bladeColor);
+  // 날 하이라이트
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillRect(x*S, (guardY - blen)*S, S, blen*S * 0.5);
+  r(ctx, x-1, guardY,        3, 1, sword.guardColor);
+  r(ctx, x,   guardY+1,      1, 3, HANDLE);
+  px(ctx, x, guardY+4, HANDLE_S);
+}
 
-const SWORD_GREAT = make([
-  '0000000000000000',
-  '0006600000000000',
-  '0000677777770000',
-  '0066677777777700',
-  '0000677777770000',
-  '0006600000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
+function _swordThrust(ctx, sword) {
+  if (!sword || !sword.bladeColor) return;
+  const blen = Math.max(6, Math.round(sword.reach * 0.65));
+  r(ctx, 13, 10, blen, 1, sword.bladeColor);
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillRect(13*S, 10*S, blen*S * 0.6, S);
+  r(ctx, 12, 9,  1, 3, sword.guardColor);
+  r(ctx, 10, 10, 2, 1, HANDLE);
+}
 
-const SWORD_EXCALIBUR = make([
-  '0000000000000000',
-  '0009900000000000',
-  '0000977777777000',
-  '00h9f77777777770',
-  '0000977777777000',
-  '0009900000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-const SWORD_LEGEND = make([
-  '0000000000000000',
-  '0008800000000000',
-  '00008k9999999000',
-  '00989k9999999990',
-  '00008k9999999000',
-  '0008800000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-export const sprites = {
-  weapons: {
-    sword: SWORD,
-    swordBroad: SWORD_BROAD,
-    swordGradius: SWORD_GRADIUS,
-    swordGreat: SWORD_GREAT,
-    swordExcalibur: SWORD_EXCALIBUR,
-    swordLegend: SWORD_LEGEND,
-  },
-  player: [PLAYER_W1, PLAYER_W2, PLAYER_ATK],
-  slime:  [SLIME_1,  SLIME_2],
-  goblin: [GOBLIN_1, GOBLIN_2],
-  knight: [KNIGHT_1, KNIGHT_2],
-  dragon: [makeDragon(0), makeDragon(1)],
-};
-
+// ─── 공통 색상 추출 ──────────────────────────────────
+function _colors(eq) {
+  const armor  = eq.armor;
+  const shield = eq.shield;
+  const boots  = eq.boots;
+  const sword  = eq.sword;
+  return {
+    ac: armor?.id  !== 'none' ? armor.bodyColor   : null,
+    hc: armor?.id  !== 'none' ? armor.helmetColor : null,
+    ht: armor?.id  !== 'none' ? armor.trimColor   : null,
+    bc: boots?.id  !== 'none' ? boots.color       : SKIN_S,
+    hasSword:  sword?.id  !== 'none',
+    hasShield: shield?.id !== 'none',
+  };
+}

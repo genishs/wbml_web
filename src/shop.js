@@ -1,158 +1,164 @@
-import { SHOP_TYPE, getShopItemsForType, getShopTitle } from './equipment.js';
+import { SHOP_TYPE, getShopItems, shopTypeName } from './equipment.js';
+import { HUD_W } from './constants.js';
 
 export class Shop {
   constructor() {
-    this.cursor = 0;
-    this.message = '';
-    this.messageTimer = 0;
-    this.type = SHOP_TYPE.SHIELD;
-    this.sessionHandled = false;
+    this.open     = false;
+    this.shopType = null;
+    this.items    = [];
+    this.cursor   = 0;
+    this._player  = null;
+    this.message  = '';
+    this.msgTimer = 0;
   }
 
-  open(type) {
-    this.type = type;
-    this.cursor = 0;
-    this.message = '';
-    this.messageTimer = 0;
-    this.sessionHandled = false;
+  openShop(shopType, player) {
+    this.shopType = shopType;
+    this._player  = player;
+    this.items    = getShopItems(shopType, player);
+    this.cursor   = 0;
+    this.open     = true;
+    this.message  = '';
+    this.msgTimer = 0;
   }
 
-  getItems(player) {
-    return getShopItemsForType(this.type, player);
-  }
+  close() { this.open = false; }
 
-  update(input, player) {
-    const items = this.getItems(player);
-
-    if (this.type === SHOP_TYPE.STARTER_GIFT) {
-      if (!this.sessionHandled) {
-        if (items[0]) {
-          player.equip(items[0].id);
-          this.message = '기본 칼을 받았다!';
-        } else {
-          this.message = '이미 기본 칼을 받았다.';
-        }
-        this.messageTimer = 1;
-        this.sessionHandled = true;
-      }
-
-      if (input.wasPressed('Enter') || input.wasPressed('KeyX') || input.wasPressed('Escape') || input.wasPressed('KeyZ')) {
-        return 'exit';
-      }
-      return null;
-    }
-
-    if (items.length === 0) {
-      this.message = this.type === SHOP_TYPE.WEAPON ? '무기 상점은 아직 준비 중이다.' : '더 좋은 장비가 없다.';
-      if (input.wasPressed('Enter') || input.wasPressed('KeyX') || input.wasPressed('Escape') || input.wasPressed('KeyZ')) {
-        return 'exit';
-      }
-      return null;
-    }
-
-    if (this.cursor >= items.length) this.cursor = items.length - 1;
+  update(input) {
+    if (!this.open) return;
+    if (this.msgTimer > 0) { this.msgTimer--; return; }
 
     if (input.wasPressed('ArrowUp'))   this.cursor = Math.max(0, this.cursor - 1);
-    if (input.wasPressed('ArrowDown')) this.cursor = Math.min(items.length - 1, this.cursor + 1);
+    if (input.wasPressed('ArrowDown')) this.cursor = Math.min(this.items.length - 1, this.cursor + 1);
 
-    if (input.wasPressed('Enter') || input.wasPressed('KeyX')) {
-      const item = items[this.cursor];
-      if (player.gold >= item.cost) {
-        player.gold -= item.cost;
-        player.equip(item.id);
-        this.message = `${item.label} 구입!`;
-      } else {
-        this.message = 'GOLD가 부족합니다!';
-      }
-      this.messageTimer = 90;
+    if (input.wasPressed('KeyZ') || input.wasPressed('Space')) {
+      this._buy();
     }
-
-    if (input.wasPressed('Escape') || input.wasPressed('KeyZ')) return 'exit';
-
-    if (this.messageTimer > 0) this.messageTimer--;
-    return null;
+    if (input.wasPressed('Escape') || input.wasPressed('KeyX')) {
+      this.close();
+    }
   }
 
-  draw(ctx, player, assets) {
-    const W = 400, H = 280;
-    const sx = 120, sy = 40;
+  _buy() {
+    if (!this.items.length) return;
+    const item = this.items[this.cursor];
+    if (!item) return;
 
-    ctx.fillStyle = 'rgba(0,0,0,0.85)';
-    ctx.fillRect(sx, sy, W, H);
-    ctx.strokeStyle = '#e94560';
+    if (this._player.gold < item.cost) {
+      this.message  = 'GOLD가 부족하다!';
+      this.msgTimer = 90;
+      return;
+    }
+
+    this._player.gold -= item.cost;
+    const slot = { weapon: 'sword', shield: 'shield', armor: 'armor', boots: 'boots' }[this.shopType];
+    this._player.equip(slot, item);
+
+    this.message  = `${item.name} 구입!`;
+    this.msgTimer = 90;
+    // 살 수 있는 나머지 목록 갱신
+    this.items  = getShopItems(this.shopType, this._player);
+    this.cursor = 0;
+  }
+
+  draw(ctx) {
+    if (!this.open) return;
+
+    // 반투명 배경
+    ctx.fillStyle = 'rgba(0,0,0,0.78)';
+    ctx.fillRect(HUD_W, 0, 528, 360);
+
+    const cx = HUD_W + 264;  // 가운데
+    const panelW = 380, panelH = 260;
+    const px = cx - panelW / 2, py = 50;
+
+    // 패널 배경
+    ctx.fillStyle = '#1a1228';
+    ctx.fillRect(px, py, panelW, panelH);
+    ctx.strokeStyle = '#8060ff';
     ctx.lineWidth = 2;
-    ctx.strokeRect(sx, sy, W, H);
+    ctx.strokeRect(px, py, panelW, panelH);
 
-    ctx.fillStyle = '#e94560';
-    ctx.font = 'bold 20px monospace';
-    ctx.fillText(getShopTitle(this.type), sx + 110, sy + 30);
+    // 제목
+    ctx.fillStyle = '#ffdd44';
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(shopTypeName(this.shopType).toUpperCase(), cx, py + 22);
 
-    ctx.font = '14px monospace';
-    ctx.fillStyle = '#ffd700';
-    ctx.fillText(`GOLD: ${player.gold}`, sx + 280, sy + 30);
+    // 현재 GOLD
+    ctx.fillStyle = '#80ff80';
+    ctx.font = '11px monospace';
+    ctx.fillText(`소지 GOLD: ${this._player.gold}`, cx, py + 40);
+    ctx.textAlign = 'left';
 
-    const items = this.getItems(player);
-    if (this.type === SHOP_TYPE.STARTER_GIFT) {
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '15px monospace';
-      ctx.fillText(this.message || '상인이 기본 칼을 건넨다.', sx + 82, sy + 120);
-      const icon = assets?.items?.sword;
-      if (icon) {
-        ctx.save();
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(icon, sx + 170, sy + 150, 60, 36);
-        ctx.restore();
-      }
-      ctx.fillStyle = '#888';
-      ctx.font = '12px monospace';
-      ctx.fillText('ENTER / Z / ESC: 돌아가기', sx + 112, sy + H - 20);
-      return;
-    }
-
-    if (items.length === 0) {
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '15px monospace';
-      ctx.fillText(this.message || '더 좋은 장비가 없다.', sx + 72, sy + 140);
-      ctx.fillStyle = '#888';
-      ctx.font = '12px monospace';
-      ctx.fillText('ENTER / Z / ESC: 돌아가기', sx + 112, sy + H - 20);
-      return;
-    }
-
-    items.forEach((item, i) => {
-      const iy = sy + 60 + i * 38;
-      if (i === this.cursor) {
-        ctx.fillStyle = '#33336688';
-        ctx.fillRect(sx + 10, iy - 4, W - 20, 32);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText('>', sx + 14, iy + 16);
-      }
-      const icon = item.iconKey ? assets?.items?.[item.iconKey] : null;
-      if (icon) {
-        ctx.save();
-        ctx.imageSmoothingEnabled = false;
-        ctx.globalAlpha = player.gold >= item.cost ? 1 : 0.4;
-        ctx.drawImage(icon, sx + 28, iy - 2, 28, 28);
-        ctx.restore();
-      }
-      ctx.fillStyle = player.gold >= item.cost ? '#ffffff' : '#888888';
-      ctx.fillText(item.label, sx + 66, iy + 16);
-      ctx.fillStyle = '#ffd700';
-      ctx.fillText(`${item.cost}G`, sx + 270, iy + 16);
+    if (!this.items.length) {
       ctx.fillStyle = '#aaaaaa';
-      ctx.font = '11px monospace';
-      ctx.fillText(item.desc, sx + 66, iy + 28);
-      ctx.font = '14px monospace';
-    });
-
-    if (this.messageTimer > 0) {
-      ctx.fillStyle = '#00ff88';
-      ctx.font = 'bold 15px monospace';
-      ctx.fillText(this.message, sx + 100, sy + H - 20);
-    } else {
-      ctx.fillStyle = '#888';
       ctx.font = '12px monospace';
-      ctx.fillText('Z/ESC: 나가기  X/Enter: 구입', sx + 80, sy + H - 20);
+      ctx.textAlign = 'center';
+      ctx.fillText('더 높은 등급의 장비가 없다.', cx, py + 100);
+      ctx.fillStyle = '#888888';
+      ctx.fillText('[ X/ESC ] 닫기', cx, py + 130);
+      ctx.textAlign = 'left';
+    } else {
+      // 아이템 목록
+      this.items.forEach((item, i) => {
+        const iy = py + 60 + i * 46;
+        const selected = i === this.cursor;
+
+        ctx.fillStyle = selected ? '#302040' : 'transparent';
+        if (selected) ctx.fillRect(px + 10, iy - 2, panelW - 20, 40);
+
+        ctx.fillStyle = selected ? '#ffffff' : '#cccccc';
+        ctx.font = `bold 12px monospace`;
+        ctx.fillText(item.name, px + 22, iy + 14);
+
+        // 스탯 설명
+        ctx.fillStyle = '#aaaadd';
+        ctx.font = '10px monospace';
+        const statText = _statDesc(item, this.shopType);
+        ctx.fillText(statText, px + 22, iy + 28);
+
+        // 가격
+        const canAfford = this._player.gold >= item.cost;
+        ctx.fillStyle = canAfford ? '#ffd700' : '#884400';
+        ctx.textAlign = 'right';
+        ctx.font = 'bold 12px monospace';
+        ctx.fillText(`${item.cost} G`, px + panelW - 14, iy + 14);
+        ctx.textAlign = 'left';
+
+        // 선택 화살표
+        if (selected) {
+          ctx.fillStyle = '#ffdd44';
+          ctx.fillText('▶', px + 10, iy + 14);
+        }
+      });
     }
+
+    // 메시지
+    if (this.msgTimer > 0) {
+      ctx.fillStyle = 'rgba(0,0,0,0.75)';
+      ctx.fillRect(cx - 120, py + panelH - 40, 240, 28);
+      ctx.fillStyle = '#ffff88';
+      ctx.font = 'bold 12px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(this.message, cx, py + panelH - 22);
+    }
+
+    // 조작 안내
+    ctx.fillStyle = '#666666';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('↑↓ 선택   Z/SPACE 구입   X/ESC 닫기', cx, py + panelH + 14);
+    ctx.textAlign = 'left';
+  }
+}
+
+function _statDesc(item, type) {
+  switch (type) {
+    case SHOP_TYPE.WEAPON: return `공격력 +${item.atk}  리치 ${item.reach}`;
+    case SHOP_TYPE.SHIELD: return `방어 +${item.def}  원거리차단 ${Math.round(item.block * 100)}%`;
+    case SHOP_TYPE.ARMOR:  return `방어 +${item.def}`;
+    case SHOP_TYPE.BOOTS:  return `속도 +${item.speed.toFixed(1)}  점프 +${item.jump.toFixed(1)}`;
+    default: return '';
   }
 }
