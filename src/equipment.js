@@ -58,3 +58,9 @@ export function getShopItems(shopType, player) {
 export function shopTypeName(shopType) {
   return { weapon: '무기 상점', shield: '방패 상점', armor: '갑옷 상점', boots: '신발 상점' }[shopType] || '상점';
 }
+
+const _SWORD_ORDER = ['none', 'gradius', 'broad', 'great', 'excalibur', 'legend'];
+export function getPlayerAppearanceStage(player) {
+  const idx = _SWORD_ORDER.indexOf(player?.eq?.sword?.id ?? 'none');
+  return Math.max(0, idx);
+}
