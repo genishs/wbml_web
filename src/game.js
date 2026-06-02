@@ -1,7 +1,7 @@
 import { CANVAS_W, CANVAS_H, HUD_W, VIEW_W, GAME_STATE, GROUND_Y } from './constants.js';
 import { Input } from './input.js';
 import { Player } from './player.js';
-import { buildStage, drawStage } from './stage.js';
+import { buildStage, drawStage, drawArena } from './stage.js';
 import { Projectile, EnemyShot } from './projectile.js';
 import { Pickup } from './pickup.js';
 import { SWORD } from './equipment.js';
@@ -23,6 +23,7 @@ export class Game {
     this.projectiles = [];   // 활성 서브웨폰
     this.enemyShots  = [];   // 적 원거리 투사체
     this.pickups     = [];   // 필드/드롭 수집물
+    this.arena       = null; // 보스방(아레나) 진입 시 설정, 필드에선 null
     this.notice      = '';   // 화면 하단 안내 메시지
     this.noticeTimer = 0;
     this._questGiven = false;
@@ -32,7 +33,7 @@ export class Game {
 
   // 부팅/게임오버 후 → 타이틀로 복귀
   _restart() {
-    this.player = new Player(160, GROUND_Y - 72);
+    this.player = new Player(160, GROUND_Y - 50);
     this.banner = '';
     this._loadStage(1);
     this.storyPage = 0;
@@ -41,7 +42,7 @@ export class Game {
 
   // 스토리 끝 → 실제 플레이 시작
   _beginGame() {
-    this.player = new Player(160, GROUND_Y - 72);
+    this.player = new Player(160, GROUND_Y - 50);
     this.banner = '';
     this._questGiven = false;
     this.notice = ''; this.noticeTimer = 0;
@@ -54,14 +55,14 @@ export class Game {
     this.stageData  = buildStage(n);
     this.camX       = 0;
     this.nearDoor   = null;
-    this.inBossRoom = false;
+    this.arena      = null;
     this.projectiles = [];
     this.enemyShots  = [];
     this.pickups     = (this.stageData.pickups || []).slice();
     this.shop.close();
     // 라운드 시작 위치로 플레이어 복귀 (장비/점수/하트는 유지)
     const p = this.player;
-    p.x = 160; p.y = GROUND_Y - 72; p.vx = 0; p.vy = 0;
+    p.x = 160; p.y = GROUND_Y - 50; p.vx = 0; p.vy = 0;
     p.state = 'idle'; p.invincible = 0;
     p.timer = p.timerMax;
   }
@@ -100,7 +101,7 @@ export class Game {
     let track = null;
     if (this.state === GAME_STATE.TITLE || this.state === GAME_STATE.STORY) track = 'title';
     else if (this.state === GAME_STATE.PLAYING || this.state === GAME_STATE.STAGE_CLEAR)
-      track = this.inBossRoom ? 'boss' : 'field';
+      track = this.arena ? 'boss' : 'field';
     if (track) audio.playMusic(track); else audio.stopMusic();
   }
 
@@ -117,43 +118,20 @@ export class Game {
   }
 
   _updatePlaying() {
+    if (this.arena) { this._updateArena(); return; }   // 보스방에 있으면 그쪽 루프
+
     const { player, stageData, input } = this;
 
     player.update(input, stageData.platforms);
 
     if (this.noticeTimer > 0) this.noticeTimer--;
-
-    // 하트 소진 시: 물약 있으면 자동 사용(+5 회복), 없으면 게임오버
-    if (player.hp <= 0) {
-      if (player.inventory.potion > 0) {
-        player.inventory.potion--;
-        player.hp = Math.min(player.maxHp, 5);
-        player.invincible = 90;
-        audio.sfx('coin');
-        this._notice('물약을 사용해 되살아났다!', 120);
-      } else {
-        this.state = GAME_STATE.GAME_OVER; return;
-      }
-    }
+    if (this._checkPotionOrDie()) return;
 
     // 1라운드: 검을 받기 전엔 장애물이 길을 막음
     const gate = stageData.gate;
     if (gate && player.eq.sword.id === 'none' && player.x + player.w > gate.x) {
       player.x = gate.x - player.w;
       if (player.vx > 0) player.vx = 0;
-    }
-
-    // 보스 방 입장 감지 → 보스 활성화 + 입구 봉쇄
-    const room = stageData.bossRoom;
-    if (room && !this.inBossRoom && player.x + player.w > room.x + 24) {
-      this.inBossRoom = true;
-      if (stageData.boss) stageData.boss.active = true;
-      audio.sfx('roomlock');
-    }
-    // 입장 후엔 방 왼쪽 벽 밖으로 못 나감
-    if (this.inBossRoom) {
-      const leftWall = room.x + 18;
-      if (player.x < leftWall) { player.x = leftWall; if (player.vx < 0) player.vx = 0; }
     }
 
     // 카메라
@@ -172,29 +150,15 @@ export class Game {
     }
     this._updateEnemyShots();
 
-    // 보스 (방에 입장해 활성화된 뒤에만 동작)
-    const boss = stageData.boss;
-    if (boss && boss.active && !(boss.dead && boss.deathTimer <= 0)) {
-      boss.update(stageData.platforms, player);
-      if (!boss.dead) this._resolveCombat(boss);
-      if (boss.dead && !boss._rewarded) {
-        boss._rewarded = true;
-        audio.sfx('bossdown');
-        player.hp = Math.min(player.maxHp, player.hp + 1);   // 원작: 보스 격파 시 하트 1칸 회복
-        player.inventory.key++;                              // 성문 열쇠 드롭
-        if (boss.swordReward) player.awardSword(boss.swordReward);
-        this._toStageClear(boss);
-      }
-    }
-
-    // 상점 문 감지 + 입장
+    // 문 감지 + 입장(상점 / NPC / 보스문)
     this.nearDoor = null;
     for (const d of stageData.doors) {
       const dist = Math.abs((player.x + player.w / 2) - (d.x + d.w / 2));
       if (dist < DOOR_INTERACT_DIST) { this.nearDoor = d; break; }
     }
     if (this.nearDoor && input.wasPressed('ArrowUp')) {
-      if (this.nearDoor.type === 'quest') this._questGift();
+      if (this.nearDoor.type === 'quest')      this._questGift();
+      else if (this.nearDoor.type === 'boss')  this._enterBossArena();
       else this.shop.openShop(this.nearDoor.type, player, this.stage);
     }
 
@@ -202,6 +166,87 @@ export class Game {
     if (input.wasPressed('ArrowDown')) this._castMagic();
     this._updateProjectiles();
     this._updatePickups();
+  }
+
+  // 하트 소진 처리 (물약 자동 사용 또는 게임오버). 처리로 인해 턴 종료 시 true
+  _checkPotionOrDie() {
+    const { player } = this;
+    if (player.hp > 0) return false;
+    if (player.inventory.potion > 0) {
+      player.inventory.potion = 0;            // 물약은 보유/소진 2상태(중복 없음)
+      player.hp = Math.min(player.maxHp, 5);
+      player.invincible = 90;
+      audio.sfx('coin');
+      this._notice('물약을 사용해 되살아났다!', 120);
+      return false;
+    }
+    this.state = GAME_STATE.GAME_OVER;
+    return true;
+  }
+
+  // 보스문 진입 → 화면 가득한 보스방(아레나)으로 전환. 보스를 직접 상대.
+  _enterBossArena() {
+    const boss = this.stageData.boss;
+    boss.active = true; boss.dead = false; boss._rewarded = false; boss.deathTimer = 0;
+    boss.x = VIEW_W - 140; boss.homeX = boss.x; boss.homeY = GROUND_Y - 48;
+    boss.y = boss.flies ? boss.homeY : GROUND_Y - boss.h;
+    boss.patrolMin = 80; boss.patrolMax = VIEW_W - boss.w - 40;
+    boss.vx = -(boss.speed || 1); boss.tick = 0;
+
+    this.arena = {
+      platforms:  [{ x: 0, y: GROUND_Y, w: VIEW_W, h: 60, isGround: true }],
+      castleGate: { x: VIEW_W - 74, y: GROUND_Y - 132, w: 60, h: 132 },
+      groundLen:  VIEW_W,
+      sky: this.stageData.sky,
+    };
+    const p = this.player;
+    p.x = 40; p.y = GROUND_Y - p.h; p.vx = 0; p.vy = 0; p.invincible = 40;
+    p.state = 'idle';
+    this.camX = 0; this.nearDoor = null;
+    this.projectiles = []; this.enemyShots = []; this.pickups = [];
+    audio.sfx('roomlock');
+    this._notice(`${this.stageData.roundName} 등장!`, 150);
+  }
+
+  _updateArena() {
+    const { player, input, arena } = this;
+    const boss = this.stageData.boss;
+
+    player.update(input, arena.platforms);
+    if (this.noticeTimer > 0) this.noticeTimer--;
+    if (this._checkPotionOrDie()) return;
+
+    this.camX = 0;
+    if (player.x < 0) { player.x = 0; if (player.vx < 0) player.vx = 0; }
+
+    // 보스 행동/공방
+    if (boss && !(boss.dead && boss.deathTimer <= 0)) {
+      boss.update(arena.platforms, player);
+      if (!boss.dead) this._resolveCombat(boss);
+      if (boss.dead && !boss._rewarded) {
+        boss._rewarded = true;
+        audio.sfx('bossdown');
+        player.hp = Math.min(player.maxHp, player.hp + 1);   // 격파 시 하트 1칸 회복
+        player.inventory.key = 1;                            // 열쇠 드롭
+        if (boss.swordReward) player.awardSword(boss.swordReward);
+        if (this.stageData.final) { this.state = GAME_STATE.WIN; return; }
+        this._notice('보스 격파! 열쇠로 성문을 열어라 →', 240);
+      }
+    }
+
+    // 성문: 열쇠 없으면 막힘 / 열쇠 들고 도달 → 클리어
+    const cg = arena.castleGate;
+    if (player.x + player.w > cg.x && player.inventory.key < 1) {
+      player.x = cg.x - player.w; if (player.vx > 0) player.vx = 0;
+    } else if (player.inventory.key >= 1 && player.x + player.w > cg.x + cg.w * 0.45) {
+      player.inventory.key = 0;
+      this._toStageClear(boss);
+      return;
+    }
+    if (player.x > VIEW_W - player.w) player.x = VIEW_W - player.w;   // 우측 벽
+
+    if (input.wasPressed('ArrowDown')) this._castMagic();
+    this._updateProjectiles();
   }
 
   _notice(text, t) { this.notice = text; this.noticeTimer = t; }
@@ -212,15 +257,17 @@ export class Game {
     if (this._questGiven) { this._notice('이미 검과 물약을 받았다.', 90); return; }
     this._questGiven = true;
     p.awardSword(SWORD.gradius);
-    p.inventory.potion += 1;
+    p.inventory.potion = 1;
     audio.sfx('clear');
     this._notice('용사여! 이 검과 물약을 받아 몬스터랜드를 구해다오!', 260);
   }
 
   _allTargets() {
-    const t = this.stageData.enemies.filter(e => !(e.dead && e.deathTimer <= 0));
     const b = this.stageData.boss;
-    if (b && b.active && !(b.dead && b.deathTimer <= 0)) t.push(b);
+    const bossLive = b && b.active && !(b.dead && b.deathTimer <= 0);
+    if (this.arena) return bossLive ? [b] : [];       // 아레나: 보스만 대상
+    const t = this.stageData.enemies.filter(e => !(e.dead && e.deathTimer <= 0));
+    if (bossLive) t.push(b);
     return t;
   }
 
@@ -264,7 +311,7 @@ export class Game {
         p.hp = Math.min(p.maxHp, p.hp + 1);
         audio.sfx('coin'); this._notice('하트 획득! 최대 체력 +1', 100); break;
       case 'potion':
-        p.inventory.potion++; audio.sfx('coin'); this._notice('물약 획득', 90); break;
+        p.inventory.potion = 1; audio.sfx('coin'); this._notice('물약 획득', 90); break;
       case 'helmet':
         p.gainBuff('helmet'); audio.sfx('clear'); this._notice('투구! 잠시 방어가 강해진다', 110); break;
       case 'gauntlet':
@@ -298,7 +345,7 @@ export class Game {
   }
 
   _updateProjectiles() {
-    const len = this.stageData.groundLen;
+    const len = (this.arena || this.stageData).groundLen;
     for (const p of this.projectiles) {
       if (p.dead) continue;
       p.update();
@@ -321,14 +368,15 @@ export class Game {
 
   _updateEnemyShots() {
     const { player } = this;
-    const len = this.stageData.groundLen;
+    const len = (this.arena || this.stageData).groundLen;
     for (const s of this.enemyShots) {
       if (s.dead) continue;
       s.update();
       if (s.x < -40 || s.x > len + 40) { s.dead = true; continue; }
-      if (player.invincible === 0 && _overlap(s.getHitbox(), { x: player.x, y: player.y, w: player.w, h: player.h })) {
-        if (player.takeDamage(s.atk, 'projectile')) audio.sfx('hurt');   // 방패로 경감/차단
-        s.dead = true;
+      if (player.invincible === 0 && !s.deflected &&
+          _overlap(s.getHitbox(), { x: player.x, y: player.y, w: player.w, h: player.h })) {
+        if (player.takeDamage(s.atk, 'projectile')) { audio.sfx('hurt'); s.dead = true; }   // 못 막음 → 소멸
+        else { audio.sfx('hit'); s.deflect(s.x < player.x ? -1 : 1); }                       // 방패로 막음 → 튕김
       }
     }
     this.enemyShots = this.enemyShots.filter(s => !s.dead);
@@ -390,28 +438,34 @@ export class Game {
     if (this.state === GAME_STATE.TITLE) { drawTitle(ctx, this.frame); return; }
     if (this.state === GAME_STATE.STORY) { drawStory(ctx, this.storyPage, this.frame); return; }
 
-    // 배경 + 스테이지 (HUD 오른쪽 영역 클립)
+    const worldCamX = this.arena ? 0 : camX;
+
+    // 배경 + 스테이지/아레나 (HUD 오른쪽 영역 클립)
     ctx.save();
     ctx.beginPath();
     ctx.rect(HUD_W, 0, VIEW_W, CANVAS_H);
     ctx.clip();
-    drawStage(ctx, stageData, camX, this.inBossRoom);
-    for (const pk of this.pickups) pk.draw(ctx, camX);
-    for (const p of this.projectiles) p.draw(ctx, camX);
-    for (const s of this.enemyShots) s.draw(ctx, camX);
 
-    // 1라운드 장애물 (검 받기 전 통행 차단)
-    const gate = stageData.gate;
-    if (gate && player.eq.sword.id === 'none') {
-      const gx = Math.round(gate.x - camX + HUD_W);
-      ctx.fillStyle = '#5a5a5a'; ctx.fillRect(gx, gate.y, gate.w, gate.h);
-      ctx.fillStyle = '#777777'; ctx.fillRect(gx + 2, gate.y + 2, gate.w - 4, 8);
-      ctx.fillStyle = '#3a3a3a'; ctx.fillRect(gx + 4, gate.y + 14, gate.w - 8, gate.h - 18);
-      ctx.fillStyle = '#222222'; ctx.fillRect(gx + gate.w / 2 - 1, gate.y, 2, gate.h);
+    if (this.arena) {
+      drawArena(ctx, this.arena, stageData.boss, player.inventory.key >= 1);
+    } else {
+      drawStage(ctx, stageData, camX);
+      // 1라운드 장애물 (검 받기 전 통행 차단)
+      const gate = stageData.gate;
+      if (gate && player.eq.sword.id === 'none') {
+        const gx = Math.round(gate.x - camX + HUD_W);
+        ctx.fillStyle = '#5a5a5a'; ctx.fillRect(gx, gate.y, gate.w, gate.h);
+        ctx.fillStyle = '#777777'; ctx.fillRect(gx + 2, gate.y + 2, gate.w - 4, 8);
+        ctx.fillStyle = '#3a3a3a'; ctx.fillRect(gx + 4, gate.y + 14, gate.w - 8, gate.h - 18);
+        ctx.fillStyle = '#222222'; ctx.fillRect(gx + gate.w / 2 - 1, gate.y, 2, gate.h);
+      }
     }
+    for (const pk of this.pickups) pk.draw(ctx, worldCamX);
+    for (const p of this.projectiles) p.draw(ctx, worldCamX);
+    for (const s of this.enemyShots) s.draw(ctx, worldCamX);
     ctx.restore();
 
-    player.draw(ctx, camX);
+    player.draw(ctx, worldCamX);
 
     if (this.nearDoor && !this.shop.open && this.state === GAME_STATE.PLAYING) {
       const d  = this.nearDoor;

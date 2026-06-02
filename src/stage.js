@@ -34,8 +34,7 @@ function makeDoor(id, x, type) {
 export function buildStage(stageNum) {
   const round     = getRound(stageNum);
   const fieldLen  = 2600 + stageNum * 360;
-  const bossRoom  = { x: fieldLen, w: VIEW_W };          // 라운드 끝 = 보스 방(한 화면)
-  const groundLen = fieldLen + bossRoom.w;
+  const groundLen = fieldLen + 200;                     // 보스문 앞 여유 바닥
   const platforms = [{ x: 0, y: GROUND_Y, w: groundLen, h: 60, isGround: true }];
   const enemies   = [];
   const doors     = [];
@@ -84,33 +83,98 @@ export function buildStage(stageNum) {
   pickups.push(new Pickup('potion', at(0.80), GROUND_Y - 18));
   pickups.push(new Pickup('gold',   at(0.45), GROUND_Y - 18, { amount: 50 }));
 
-  // 보스: 방 안 오른쪽에 대기. 입장 전까지 active=false → 필드로 안 나옴
-  const bossX = bossRoom.x + bossRoom.w * 0.62;
-  const boss  = new Boss(round.boss, bossX, GROUND_Y - 48, {
+  // 보스문: 필드 끝. 다른 상점처럼 문을 열고 들어가면 보스방(아레나)으로 전환
+  const bossDoor = makeDoor('boss-door', fieldLen + 60, 'boss');
+  bossDoor.y = GROUND_Y - 70; bossDoor.w = 48; bossDoor.h = 70;   // 보스문은 더 크고 위압적
+  doors.push(bossDoor);
+
+  // 보스 객체(스탯). 위치/순찰은 아레나 입장 시 설정됨
+  const boss = new Boss(round.boss, fieldLen, GROUND_Y - 48, {
     name: round.name,
     hp:   round.hp,
     score: round.score,
     swordReward: round.sword ? SWORD[round.sword] : null,
   });
-  boss.homeX     = bossX;
-  boss.patrolMin = bossRoom.x + 70;
-  boss.patrolMax = bossRoom.x + bossRoom.w - boss.w - 40;
 
   return {
-    platforms, enemies, doors, boss, groundLen, bossRoom, gate, pickups,
+    platforms, enemies, doors, boss, groundLen, gate, pickups, bossDoor,
     sky: round.sky, roundName: round.name, final: !!round.final,
   };
 }
 
-export function drawStage(ctx, stageData, camX, inRoom = false) {
-  const { platforms, enemies, doors, boss } = stageData;
-
+export function drawStage(ctx, stageData, camX) {
+  const { platforms, enemies, doors } = stageData;
   _drawSky(ctx, stageData.sky);
   _drawPlatforms(ctx, platforms, camX);
-  _drawBossRoom(ctx, stageData.bossRoom, camX, inRoom);
   _drawDoors(ctx, doors, camX);
   for (const e of enemies) e.draw(ctx, camX);
-  if (boss && boss.active) boss.draw(ctx, camX);
+}
+
+// 보스방(아레나): 문을 열고 들어가면 나오는 화면 가득한 석조 방. 보스를 직접 상대.
+// 격파 후 열쇠로 우측 성문을 열어 클리어. camX는 항상 0(한 화면 고정).
+export function drawArena(ctx, arena, boss, hasKey) {
+  const L = HUD_W, R = HUD_W + VIEW_W;
+  // 뒷벽 + 벽돌
+  ctx.fillStyle = '#241c2e'; ctx.fillRect(L, 0, VIEW_W, GROUND_Y);
+  ctx.fillStyle = '#2f2638';
+  for (let y = 8; y < GROUND_Y; y += 26) {
+    const off = ((y / 26) | 0) % 2 ? 24 : 0;
+    for (let x = L - 48 + off; x < R; x += 48) {
+      const bx = Math.max(L, x);
+      ctx.fillRect(bx, y, Math.min(x + 44, R) - bx, 22);
+    }
+  }
+  // 바닥
+  ctx.fillStyle = '#37303f'; ctx.fillRect(L, GROUND_Y, VIEW_W, 60);
+  ctx.fillStyle = '#2a2433';
+  for (let x = L; x < R; x += 32) ctx.fillRect(x, GROUND_Y, 2, 60);
+  // 좌측 입구(닫힌 철문 — 가둠 연출) + 횃불
+  ctx.fillStyle = '#1a1422'; ctx.fillRect(L, 0, 14, GROUND_Y);
+  ctx.fillStyle = '#5a5a6a';
+  for (let by = 0; by < GROUND_Y; by += 16) ctx.fillRect(L, by, 12, 12);
+  _torch(ctx, L + 26, GROUND_Y - 120);
+  _torch(ctx, R - 64, GROUND_Y - 120);
+  // 우측 성문 + 보스
+  _drawCastleGate(ctx, arena.castleGate, 0, hasKey);
+  if (boss && !(boss.dead && boss.deathTimer <= 0)) boss.draw(ctx, 0);
+}
+
+// 성문(라운드 출구). 열쇠 보유 시 창살이 올라가 통과 가능한 모습.
+function _drawCastleGate(ctx, g, camX, open) {
+  if (!g) return;
+  const sx = Math.round(g.x - camX + HUD_W);
+  if (sx + g.w * 2 < HUD_W || sx - g.w > 640) return;
+
+  // 성벽 기둥(문 양옆)
+  ctx.fillStyle = '#6a6a78';
+  ctx.fillRect(sx - 16, g.y - 24, 16, g.h + 24);
+  ctx.fillRect(sx + g.w, g.y - 24, 16, g.h + 24);
+  ctx.fillStyle = '#52525e';                    // 흉벽(총안)
+  for (let bx = -16; bx < g.w + 16; bx += 12) {
+    if (((bx + 16) / 12 | 0) % 2 === 0) ctx.fillRect(sx + bx, g.y - 32, 10, 10);
+  }
+  // 아치 입구(어두운 안쪽)
+  ctx.fillStyle = '#0a0810';
+  ctx.fillRect(sx, g.y, g.w, g.h);
+  ctx.beginPath(); ctx.arc(sx + g.w / 2, g.y, g.w / 2, Math.PI, 0); ctx.fill();
+
+  if (open) {
+    // 열린 상태: 창살이 위로 올라가 있고 안쪽에서 빛이 새어나옴
+    ctx.fillStyle = 'rgba(255,230,140,0.25)';
+    ctx.fillRect(sx + 4, g.y + 6, g.w - 8, g.h - 6);
+    ctx.fillStyle = '#7a5a2a';
+    for (let i = 0; i < 5; i++) ctx.fillRect(sx + 4 + i * (g.w / 5), g.y - 6, 3, 10);
+    ctx.fillStyle = '#ffe060'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('▶ CLEAR', sx + g.w / 2, g.y - 14); ctx.textAlign = 'left';
+  } else {
+    // 잠긴 상태: 쇠창살(포트컬리스)
+    ctx.fillStyle = '#9a9aa8';
+    for (let i = 0; i <= 4; i++) ctx.fillRect(sx + 3 + i * (g.w - 6) / 4, g.y + 4, 3, g.h - 4);
+    for (let j = 0; j < g.h; j += 16) ctx.fillRect(sx + 3, g.y + 4 + j, g.w - 6, 3);
+    ctx.fillStyle = '#ffcc00';                  // 자물쇠
+    ctx.fillRect(sx + g.w / 2 - 5, g.y + g.h / 2 - 5, 10, 9);
+    ctx.fillStyle = '#0a0810'; ctx.fillRect(sx + g.w / 2 - 1, g.y + g.h / 2 - 1, 2, 4);
+  }
 }
 
 function _drawSky(ctx, sky) {
@@ -155,6 +219,8 @@ function _drawDoors(ctx, doors, camX) {
     const sx = d.x - camX + HUD_W;
     if (sx + d.w < HUD_W || sx > 640) continue;
 
+    if (d.type === 'boss') { _drawBossDoor(ctx, sx, d); continue; }
+
     // 문 틀
     ctx.fillStyle = '#6a4820';
     ctx.fillRect(sx, d.y, d.w, d.h);
@@ -175,55 +241,20 @@ function _drawDoors(ctx, doors, camX) {
   }
 }
 
-// 보스 방(석조 챔버). closed=true면 입구에 철문이 내려와 가둠.
-function _drawBossRoom(ctx, room, camX, closed) {
-  if (!room) return;
-  const left  = room.x - camX + HUD_W;
-  const right = room.x + room.w - camX + HUD_W;
-  if (right < HUD_W || left > 640) return;
-
-  const x0 = Math.max(HUD_W, left);
-  const x1 = Math.min(640, right);
-  const w  = x1 - x0;
-
-  // 뒷벽 (지면 위)
-  ctx.fillStyle = '#241c2e';
-  ctx.fillRect(x0, 0, w, GROUND_Y);
-  // 벽돌 무늬
-  ctx.fillStyle = '#2f2638';
-  for (let y = 8; y < GROUND_Y; y += 26) {
-    const off = ((y / 26) | 0) % 2 ? 24 : 0;
-    for (let x = x0 - 48 + off; x < x1; x += 48) {
-      const bx = Math.max(x0, x);
-      ctx.fillRect(bx, y, Math.min(x + 44, x1) - bx, 22);
-    }
-  }
-  // 석조 바닥
-  ctx.fillStyle = '#37303f';
-  ctx.fillRect(x0, GROUND_Y, w, 60);
-  ctx.fillStyle = '#2a2433';
-  for (let x = x0; x < x1; x += 32) ctx.fillRect(x, GROUND_Y, 2, 60);
-
-  // 좌측 입구 기둥 + 횃불
-  if (left >= HUD_W - 20 && left <= 640) {
-    ctx.fillStyle = '#1a1422';
-    ctx.fillRect(left, 0, 14, GROUND_Y);
-    _torch(ctx, left + 22, GROUND_Y - 120);
-  }
-  // 우측 끝 기둥 + 횃불
-  if (right <= 640 + 20 && right >= HUD_W) {
-    ctx.fillStyle = '#1a1422';
-    ctx.fillRect(right - 14, 0, 14, GROUND_Y);
-    _torch(ctx, right - 26, GROUND_Y - 120);
-  }
-
-  // 닫힌 철문(입장 후 빠져나가지 못함)
-  if (closed && left >= HUD_W - 14 && left <= 640) {
-    ctx.fillStyle = '#5a5a6a';
-    for (let by = 0; by < GROUND_Y; by += 16) ctx.fillRect(left, by, 12, 12);
-    ctx.fillStyle = '#3a3a48';
-    for (let by = 0; by < GROUND_Y; by += 16) ctx.fillRect(left + 12, by + 2, 4, 12);
-  }
+// 보스문: 해골이 박힌 위압적인 석문(아치). 열고 들어가면 보스방으로 전환.
+function _drawBossDoor(ctx, sx, d) {
+  ctx.fillStyle = '#3a2030';                       // 석문 기둥
+  ctx.fillRect(sx - 6, d.y - 16, d.w + 12, d.h + 16);
+  ctx.fillStyle = '#0a0508';                        // 아치 내부(어둠)
+  ctx.fillRect(sx + 3, d.y, d.w - 6, d.h);
+  ctx.beginPath(); ctx.arc(sx + d.w / 2, d.y, d.w / 2 - 3, Math.PI, 0); ctx.fill();
+  // 해골 장식
+  const skx = sx + d.w / 2, sky = d.y - 6;
+  ctx.fillStyle = '#e8e0d0'; ctx.fillRect(skx - 5, sky - 5, 10, 9);
+  ctx.fillStyle = '#0a0508'; ctx.fillRect(skx - 4, sky - 2, 3, 3); ctx.fillRect(skx + 1, sky - 2, 3, 3);
+  // 라벨
+  ctx.fillStyle = '#ff5050'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('BOSS', sx + d.w / 2, d.y - 20); ctx.textAlign = 'left';
 }
 
 function _torch(ctx, x, y) {

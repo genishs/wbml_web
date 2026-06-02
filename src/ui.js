@@ -115,33 +115,33 @@ function _drawHeart(ctx, x, y, size) {
   ctx.fill();
 }
 
+// 소지품 6슬롯 — 항상 6칸 표시(소지=점등). 2열×3행, 좌상단부터 시계방향 배치:
+//  투구 → 열쇠 → 물약 → 스토리 → 날개신발 → 건틀릿. 모두 보유/미보유 2상태(중복 없음).
 function _drawInventoryGrid(ctx, player, y) {
   const inv = player.inventory;
-  const slots = [
-    { key: 'helmet',    has: inv.helmet > 0,    n: inv.helmet },
-    { key: 'gauntlet',  has: inv.gauntlet > 0,  n: inv.gauntlet },
-    { key: 'wingboots', has: inv.wingboots > 0, n: inv.wingboots },
-    { key: 'key',       has: inv.key > 0,       n: inv.key },
-    { key: 'potion',    has: inv.potion > 0,    n: inv.potion },
-    { key: 'story',     has: !!inv.story,       n: 0 },
-  ];
-  const cols = 3, cw = 34, ch = 30, sx0 = (HUD_W - cols * cw) / 2;
+  const has = {
+    helmet: inv.helmet > 0, key: inv.key > 0, potion: inv.potion > 0,
+    story: !!inv.story, wingboots: inv.wingboots > 0, gauntlet: inv.gauntlet > 0,
+  };
+  // 셀 인덱스(행우선 0=TL,1=TR,2=ML,3=MR,4=BL,5=BR) → 시계방향 아이템 배치
+  const cells = ['helmet', 'key', 'gauntlet', 'potion', 'wingboots', 'story'];
+  const cols = 2, cw = 46, ch = 22, sx0 = (HUD_W - cols * cw) / 2;
   ctx.textAlign = 'center';
-  slots.forEach((s, i) => {
+  cells.forEach((key, i) => {
     const col = i % cols, row = Math.floor(i / cols);
     const sx = sx0 + col * cw, sy = y + row * ch;
-    ctx.fillStyle = s.has ? '#2a2040' : '#111111';
+    const on = has[key];
+    // 빈 칸도 또렷하게 보이는 슬롯(테두리 항상 표시)
+    ctx.fillStyle = on ? '#2a2040' : '#161620';
     ctx.fillRect(sx + 1, sy + 1, cw - 2, ch - 2);
-    ctx.strokeStyle = s.has ? '#6040cc' : '#333333';
+    ctx.strokeStyle = on ? '#8060e0' : '#555566';
     ctx.lineWidth = 1;
     ctx.strokeRect(sx + 1, sy + 1, cw - 2, ch - 2);
-    const ccx = sx + cw / 2, ccy = sy + ch / 2;
-    if (s.has) _drawInvIcon(ctx, s.key, ccx, ccy);
-    else { ctx.fillStyle = '#333333'; ctx.font = '8px monospace'; ctx.fillText('·', ccx, ccy + 3); }
-    if (s.n > 1) {
-      ctx.fillStyle = '#ffdd44'; ctx.font = 'bold 8px monospace'; ctx.textAlign = 'right';
-      ctx.fillText('×' + s.n, sx + cw - 3, sy + ch - 3); ctx.textAlign = 'center';
-    }
+    // 아이콘: 보유 시 선명, 미보유 시 흐릿하게(어떤 칸인지 항상 식별)
+    const ccx = sx + cw / 2, ccy = sy + ch / 2 + 1;
+    ctx.globalAlpha = on ? 1 : 0.22;
+    _drawInvIcon(ctx, key, ccx, ccy);
+    ctx.globalAlpha = 1;
   });
 }
 

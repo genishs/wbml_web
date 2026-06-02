@@ -1,4 +1,4 @@
-import { GRAVITY, JUMP_FORCE, PLAYER_SPEED, HUD_W } from './constants.js';
+import { GRAVITY, JUMP_FORCE, PLAYER_SPEED, HUD_W, GROUND_Y } from './constants.js';
 import { SWORD, SHIELD, ARMOR, BOOTS, MAGIC } from './equipment.js';
 import { drawWonderBoy } from './sprites.js';
 import { audio } from './audio.js';
@@ -6,16 +6,18 @@ import { audio } from './audio.js';
 const ATTACK_FRAMES    = 16;   // 4프레임 × 4틱 찌르기
 const KNOCKBACK_FRAMES = 28;
 const BUFF_DURATION    = 900;  // 시간제 강화아이템 지속(프레임, ≈15초)
+const PLAYER_SCALE     = 0.7;  // 스프라이트/충돌박스 동시 축소(몹과 크기 균형)
+const SPAWN_Y          = GROUND_Y - 50;  // 발이 지면에 닿는 시작 y (h=50)
 
 // ⚠ 테스트용: 공격 판정 확대. 정식 빌드 전 1.0 / 기본값으로 되돌릴 것
 const TEST_REACH_MULT = 2.6;   // 리치 배수
-const TEST_HIT_H      = 48;    // 판정 세로 높이
-const TEST_HIT_YOFF   = 22;    // 판정 시작 y(플레이어 상단 기준)
+const TEST_HIT_H      = 40;    // 판정 세로 높이 (축소된 몸에 맞춤)
+const TEST_HIT_YOFF   = 8;     // 판정 시작 y(플레이어 상단 기준)
 
 export class Player {
   constructor(x, y) {
     this.x = x; this.y = y;
-    this.w = 28; this.h = 72;   // S=3 기준: 시각 높이 26*3=78, 충돌 약간 안쪽
+    this.w = 20; this.h = 50;   // 스프라이트 0.7배 축소(몹과 균형). 원본 28×72 → 20×50
     this.vx = 0; this.vy = 0;
     this.onGround = false;
     this.facing = 1;
@@ -220,6 +222,7 @@ export class Player {
     if (this.invincible > 0 && Math.floor(this.invincible / 4) % 2 === 1) return;
     ctx.save();
     ctx.translate(Math.round(this.x - camX + HUD_W), Math.round(this.y));
+    ctx.scale(PLAYER_SCALE, PLAYER_SCALE);
     drawWonderBoy(ctx, {
       facing: this.facing, state: this.state, animFrame: this.animFrame, eq: this.eq,
       attackPhase: this.state === 'attack' ? this.attackPhase() : 0,

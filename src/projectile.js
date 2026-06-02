@@ -26,6 +26,15 @@ export class EnemyShot {
     this.vy = p.arc ? -3.2 : 0;
     this.arc = p.arc; this.color = p.color; this.core = p.core;
     this.life = 200; this.dead = false; this.tick = 0;
+    this.deflected = false;
+  }
+  // 방패로 막혔을 때: 데미지 없이 위로 튕겨나가 떨어지는 연출
+  deflect(dir) {
+    this.deflected = true;
+    this.vx = dir * 3.2;
+    this.vy = -3.6;
+    this.arc = true;                       // 포물선으로 튄 뒤 낙하 소멸
+    this.life = Math.min(this.life, 48);
   }
   update() {
     this.tick++;
@@ -39,6 +48,16 @@ export class EnemyShot {
   getHitbox() { return { x: this.x, y: this.y, w: this.w, h: this.h }; }
   draw(ctx, camX) {
     const sx = Math.round(this.x - camX + HUD_W), sy = Math.round(this.y);
+    if (this.deflected) {
+      // 튕겨나가는 중: 회전하는 흰 불꽃
+      ctx.save();
+      ctx.translate(sx + this.w / 2, sy + this.h / 2);
+      ctx.rotate(this.tick * 0.5);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(-this.w / 2, -2, this.w, 4); ctx.fillRect(-2, -this.h / 2, 4, this.h);
+      ctx.fillStyle = this.core;  ctx.fillRect(-3, -3, 6, 6);
+      ctx.restore();
+      return;
+    }
     ctx.fillStyle = this.color; ctx.fillRect(sx, sy, this.w, this.h);
     ctx.fillStyle = this.core;
     ctx.fillRect(sx + 2, sy + 1, Math.max(2, this.w - 4), Math.max(2, this.h - 2));
