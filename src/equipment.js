@@ -9,10 +9,10 @@ export const SWORD = {
 
 export const SHIELD = {
   none:   { id: 'none',   name: '없음',        def: 0,  block: 0.0, cost: 0,    bodyColor: null,     rimColor: null },
-  light:  { id: 'light',  name: '라이트 방패',  def: 5,  block: 0.3, cost: 80,   bodyColor: '#b8c8d8', rimColor: '#808898' },
-  knight: { id: 'knight', name: '나이트 방패',  def: 10, block: 0.5, cost: 200,  bodyColor: '#6080b8', rimColor: '#405080' },
-  heavy:  { id: 'heavy',  name: '무거운 방패',  def: 15, block: 0.7, cost: 500,  bodyColor: '#506070', rimColor: '#304050' },
-  legend: { id: 'legend', name: '전설의 방패',  def: 20, block: 0.9, cost: 1500, bodyColor: '#e8d050', rimColor: '#c0a020' },
+  light:  { id: 'light',  name: '라이트 방패',  def: 5,  block: 0.3, cost: 40,   bodyColor: '#b8c8d8', rimColor: '#808898' },
+  knight: { id: 'knight', name: '나이트 방패',  def: 10, block: 0.5, cost: 120,  bodyColor: '#6080b8', rimColor: '#405080' },
+  heavy:  { id: 'heavy',  name: '하드 방패',    def: 15, block: 0.7, cost: 250,  bodyColor: '#506070', rimColor: '#304050' },
+  legend: { id: 'legend', name: '전설의 방패',  def: 20, block: 0.9, cost: 360,  bodyColor: '#e8d050', rimColor: '#c0a020' },
 };
 
 export const ARMOR = {
@@ -42,8 +42,11 @@ export const SHOP_TYPE = {
 export function getShopItems(shopType, player) {
   const eq = player.eq;
   switch (shopType) {
-    case SHOP_TYPE.WEAPON:
-      return Object.values(SWORD).filter(i => i.id !== 'none' && i.atk > (eq.sword?.atk ?? 0));
+    case SHOP_TYPE.WEAPON: {
+      // 아케이드: 첫 검 Gradius만 상점에서 획득. 이후(Bronze/Great/Excalibur/Legend)는 보스 드롭(구매 불가).
+      const hasSword = (eq.sword?.id ?? 'none') !== 'none';
+      return hasSword ? [] : [SWORD.gradius];
+    }
     case SHOP_TYPE.SHIELD:
       return Object.values(SHIELD).filter(i => i.id !== 'none' && i.def > (eq.shield?.def ?? 0));
     case SHOP_TYPE.ARMOR:

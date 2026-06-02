@@ -18,10 +18,14 @@ export class Player {
     this.animFrame  = 0;
     this.animTick   = 0;
 
-    this.hp = 5; this.maxHp = 5;
+    this.hp = 5; this.maxHp = 5;   // 아케이드: 시작 5, 점수로 최대 10까지 확장
     this.score = 0;
-    this.gold  = 9999;
+    this.gold  = 9999;             // TODO: 정식 빌드에선 0 (골드는 적·보물에서 획득). 현재 테스트 편의값
     this.timer = 3600; this.timerMax = 3600;
+
+    // 점수 마일스톤마다 최대 하트 +1 (최대 10). 임계값: 30k 후 +50k 간격 (원판 추정치)
+    this.heartThresholds = [30000, 80000, 130000, 180000, 230000];
+    this._nextHeartIdx   = 0;
 
     this.eq = {
       sword:  SWORD.none,
@@ -47,6 +51,15 @@ export class Player {
 
   equip(slot, item) { this.eq[slot] = item; }
 
+  // 보스 드롭으로 검 업그레이드 (상점 구매 불가). 더 강한 검일 때만 장착.
+  awardSword(item) {
+    if (item && item.atk > (this.eq.sword?.atk ?? 0)) {
+      this.eq.sword = item;
+      return true;
+    }
+    return false;
+  }
+
   takeDamage(dmg) {
     if (this.invincible > 0) return false;
     const reduce = ((this.eq.shield?.def ?? 0) + (this.eq.armor?.def ?? 0)) / 100;
@@ -62,8 +75,17 @@ export class Player {
   }
 
   update(input, platforms) {
-    this.timer = Math.max(0, this.timer - 1);
-    if (this.timer === 0 && this.animTick % 120 === 0) this.hp = Math.max(0, this.hp - 1);
+    // 아케이드 타이머: 모래가 다 떨어지면 즉사가 아니라 하트 1칸 감소 후 리셋(뒤집힘)
+    if (--this.timer <= 0) {
+      this.hp = Math.max(0, this.hp - 1);
+      this.timer = this.timerMax;
+    }
+    // 점수로 최대 하트 확장 (5→10). 확장된 칸은 채워서 보상
+    while (this._nextHeartIdx < this.heartThresholds.length &&
+           this.maxHp < 10 &&
+           this.score >= this.heartThresholds[this._nextHeartIdx]) {
+      this.maxHp++; this.hp++; this._nextHeartIdx++;
+    }
     if (this.invincible > 0) this.invincible--;
     this.animTick++;
 
