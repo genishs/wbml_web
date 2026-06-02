@@ -1,5 +1,6 @@
 import { Game } from './game.js';
 import { CANVAS_W, CANVAS_H } from './constants.js';
+import { loadAssets } from './assets.js';
 
 const canvas = document.getElementById('gameCanvas');
 const dpr = window.devicePixelRatio || 1;
@@ -15,5 +16,8 @@ canvas.style.height = CANVAS_H + 'px';
 const ctx = canvas.getContext('2d');
 ctx.scale(dpr, dpr);
 
-const game = new Game(canvas, ctx);
-game.start();
+// 레퍼런스 아트(PNG)를 먼저 로드한 뒤 게임 시작 — 없으면 캔버스 폴백으로 동작
+loadAssets().finally(() => {
+  const game = new Game(canvas, ctx);
+  game.start();
+});

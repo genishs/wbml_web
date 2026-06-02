@@ -46,7 +46,8 @@ export function buildStage(stageNum) {
   for (let i = 0; i < count; i++) {
     const t  = types[i % types.length];
     const ex = 500 + i * ((groundLen - 1000) / count);
-    const ey = t === 'bat' ? GROUND_Y - 80 : GROUND_Y - (t === 'knight' ? 30 : 18);
+    // 지상 적은 바닥 위쪽에 스폰 → 중력으로 안착, 박쥐는 공중 부유
+    const ey = t === 'bat' ? GROUND_Y - 110 : GROUND_Y - 90;
     enemies.push(new Enemy(t, ex, ey, { patrolMin: ex - 80, patrolMax: ex + 80 }));
   }
 

@@ -59,22 +59,23 @@ const ENEMY_IMG_MAP = {
   dragon: 'dragon', great_dragon: 'dragon', dragon_warrior: 'dragon',
 };
 
+// 스프라이트를 그렸으면 true, 이미지가 없으면 false(호출부가 폴백 렌더)
 export function drawEnemySprite(ctx, { type, facing, w, h }) {
   const imgKey = ENEMY_IMG_MAP[type];
   const img    = imgKey ? assets.imgs[imgKey] : null;
+  if (!img || img.naturalHeight <= 0) return false;
+
+  // 히트박스 높이에 맞춰 종횡비 유지, 가로 가운데 정렬
+  const drawH = h;
+  const drawW = img.naturalWidth * (drawH / img.naturalHeight);
+  const ox    = (w - drawW) / 2;
 
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-
-  if (img && img.naturalHeight > 0) {
-    if (facing === -1) { ctx.translate(w, 0); ctx.scale(-1, 1); }
-    ctx.drawImage(img, 0, 0, w, h);
-  } else {
-    ctx.fillStyle = '#888888';
-    ctx.fillRect(0, 0, w, h);
-  }
-
+  if (facing === -1) { ctx.translate(w, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(img, ox, 0, drawW, drawH);
   ctx.restore();
+  return true;
 }
 
 // ── Legacy canvas pixel-art sprites ──────────────────────────────────────────

@@ -1,10 +1,12 @@
 import { GRAVITY, HUD_W } from './constants.js';
+import { drawEnemySprite } from './sprites.js';
 
+// 크기: 히어로(약 72px) 기준 아케이드 비율에 맞춰 보정
 const DEFS = {
-  blob:   { w: 20, h: 18, hp: 2,  atk: 1, speed: 0.8,  gold: 5,  score: 100, color: '#7b2fbe', darkColor: '#5a1e8a' },
-  snake:  { w: 24, h: 12, hp: 1,  atk: 1, speed: 0.6,  gold: 3,  score: 80,  color: '#2d9e4a', darkColor: '#1a7030' },
-  bat:    { w: 18, h: 14, hp: 2,  atk: 1, speed: 1.2,  gold: 4,  score: 100, color: '#8b3fae', darkColor: '#601880', flies: true },
-  knight: { w: 22, h: 30, hp: 8,  atk: 2, speed: 0.9,  gold: 15, score: 300, color: '#8080c0', darkColor: '#5050a0' },
+  blob:   { w: 34, h: 34, hp: 2,  atk: 1, speed: 0.8,  gold: 5,  score: 100, color: '#7b2fbe', darkColor: '#5a1e8a' },
+  snake:  { w: 32, h: 18, hp: 1,  atk: 1, speed: 0.6,  gold: 3,  score: 80,  color: '#2d9e4a', darkColor: '#1a7030' },
+  bat:    { w: 28, h: 22, hp: 2,  atk: 1, speed: 1.2,  gold: 4,  score: 100, color: '#8b3fae', darkColor: '#601880', flies: true },
+  knight: { w: 36, h: 48, hp: 8,  atk: 2, speed: 0.9,  gold: 15, score: 300, color: '#8080c0', darkColor: '#5050a0' },
 };
 
 export class Enemy {
@@ -71,18 +73,26 @@ export class Enemy {
     const alpha = this.dead ? this.deathTimer / 30 : 1;
     ctx.globalAlpha = alpha;
 
-    // 몸통
-    ctx.fillStyle = this.color;
-    ctx.fillRect(sx, sy, this.w, this.h);
-    ctx.fillStyle = this.darkColor;
-    ctx.fillRect(sx + 2, sy + 2, this.w - 4, this.h - 4);
+    // 레퍼런스 스프라이트 우선, 없으면 색 사각형 폴백
+    ctx.save();
+    ctx.translate(sx, sy);
+    const drawn = drawEnemySprite(ctx, { type: this.type, facing: this.facing, w: this.w, h: this.h });
+    ctx.restore();
 
-    // 눈
-    ctx.fillStyle = '#ffffff';
-    const ex = this.facing === 1 ? sx + this.w - 6 : sx + 2;
-    ctx.fillRect(ex, sy + 4, 4, 4);
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(ex + (this.facing === 1 ? 2 : 0), sy + 5, 2, 2);
+    if (!drawn) {
+      // 몸통
+      ctx.fillStyle = this.color;
+      ctx.fillRect(sx, sy, this.w, this.h);
+      ctx.fillStyle = this.darkColor;
+      ctx.fillRect(sx + 2, sy + 2, this.w - 4, this.h - 4);
+
+      // 눈
+      ctx.fillStyle = '#ffffff';
+      const ex = this.facing === 1 ? sx + this.w - 6 : sx + 2;
+      ctx.fillRect(ex, sy + 4, 4, 4);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(ex + (this.facing === 1 ? 2 : 0), sy + 5, 2, 2);
+    }
 
     // HP 바
     if (this.hp < this.maxHp && !this.dead) {
