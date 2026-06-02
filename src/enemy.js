@@ -95,3 +95,72 @@ export class Enemy {
     ctx.globalAlpha = 1;
   }
 }
+
+// ── 보스 (라운드 끝 가디언) ──
+const BOSS_DEFS = {
+  death:   { name: 'DEATH',    w: 38, h: 46, hp: 28, atk: 2, speed: 1.6, gold: 100, score: 2000, color: '#23232e', darkColor: '#0a0a12', flies: true  },
+  generic: { name: 'GUARDIAN', w: 42, h: 48, hp: 44, atk: 3, speed: 1.1, gold: 120, score: 2600, color: '#8a2030', darkColor: '#481018', flies: false },
+};
+
+export class Boss extends Enemy {
+  constructor(type, x, y, opts = {}) {
+    super('knight', x, y, opts);
+    const d = BOSS_DEFS[type] || BOSS_DEFS.generic;
+    Object.assign(this, d);
+    this.type        = 'boss:' + type;
+    this.bossType    = type;
+    this.isBoss      = true;
+    this.hp = d.hp;  this.maxHp = d.hp;
+    this.swordReward = opts.swordReward ?? null;
+    this.homeX = x;  this.homeY = y;
+    this.patrolMin = x - 160; this.patrolMax = x + 60;
+    this.vx = -d.speed;
+    this.tick = 0;
+    this._rewarded = false;
+  }
+
+  update(platforms, player) {
+    if (this.dead) { this.deathTimer--; return; }
+    this.tick++;
+    if (this.flies) {
+      const tx  = player ? player.x : this.homeX;
+      const dir = Math.sign(tx - this.x) || 1;
+      this.x += dir * this.speed * 0.6;
+      this.facing = dir;
+      this.y = this.homeY - 30 + Math.sin(this.tick * 0.05) * 26;
+    } else {
+      this.vy += GRAVITY;
+      this.x += this.vx; this.y += this.vy;
+      this._collide(platforms);
+      if (this.x < this.patrolMin) { this.vx =  Math.abs(this.vx); this.facing =  1; }
+      if (this.x > this.patrolMax) { this.vx = -Math.abs(this.vx); this.facing = -1; }
+      if (this.onGround && this.tick % 90 === 0) this.vy = -7;   // 가끔 도약
+    }
+  }
+
+  draw(ctx, camX) {
+    if (this.dead && this.deathTimer <= 0) return;
+    const sx = Math.round(this.x - camX + HUD_W);
+    const sy = Math.round(this.y);
+    ctx.globalAlpha = this.dead ? this.deathTimer / 30 : 1;
+
+    ctx.fillStyle = this.color;
+    ctx.fillRect(sx, sy, this.w, this.h);
+    ctx.fillStyle = this.darkColor;
+    ctx.fillRect(sx + 3, sy + 3, this.w - 6, this.h - 6);
+    // 위협적인 눈
+    ctx.fillStyle = '#ff3030';
+    ctx.fillRect(sx + 7, sy + 11, 6, 5);
+    ctx.fillRect(sx + this.w - 13, sy + 11, 6, 5);
+    ctx.globalAlpha = 1;
+
+    if (!this.dead) {
+      const bw = this.w + 10, bx = sx - 5, by = sy - 13;
+      ctx.fillStyle = '#400';     ctx.fillRect(bx, by, bw, 5);
+      ctx.fillStyle = '#ff3040';  ctx.fillRect(bx, by, bw * this.hp / this.maxHp, 5);
+      ctx.fillStyle = '#ffffff';  ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center';
+      ctx.fillText(this.name, sx + this.w / 2, by - 3);
+      ctx.textAlign = 'left';
+    }
+  }
+}

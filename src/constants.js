@@ -16,6 +16,7 @@ export const GAME_STATE = {
   SHOP:        'shop',
   GAME_OVER:   'gameover',
   STAGE_CLEAR: 'stageclear',
+  WIN:         'win',
   PAUSE:       'pause',
 };
 
