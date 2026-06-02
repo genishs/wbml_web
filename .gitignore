@@ -2,3 +2,8 @@
 node_modules/
 *.log
 doc/ignore/
+
+# 저작권 ROM/추출물은 절대 커밋하지 않음 (학습용 로컬 전용)
+original/
+.claude/
+_t*.mjs

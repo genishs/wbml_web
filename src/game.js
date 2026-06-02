@@ -2,8 +2,13 @@ import { CANVAS_W, CANVAS_H, HUD_W, VIEW_W, GAME_STATE, GROUND_Y } from './const
 import { Input } from './input.js';
 import { Player } from './player.js';
 import { buildStage, drawStage } from './stage.js';
+import { Projectile, EnemyShot } from './projectile.js';
+import { Pickup } from './pickup.js';
+import { SWORD } from './equipment.js';
 import { Shop } from './shop.js';
 import { drawHUD } from './ui.js';
+import { drawTitle, drawStory, STORY_PAGES } from './title.js';
+import { audio } from './audio.js';
 
 const DOOR_INTERACT_DIST = 30;
 
@@ -13,22 +18,46 @@ export class Game {
     this.ctx    = ctx ?? canvas.getContext('2d');
     this.input  = new Input();
     this.shop   = new Shop();
+    this.frame  = 0;
+    this.storyPage = 0;
+    this.projectiles = [];   // 활성 서브웨폰
+    this.enemyShots  = [];   // 적 원거리 투사체
+    this.pickups     = [];   // 필드/드롭 수집물
+    this.notice      = '';   // 화면 하단 안내 메시지
+    this.noticeTimer = 0;
+    this._questGiven = false;
     this._loop  = this._loop.bind(this);
     this._restart();
   }
 
+  // 부팅/게임오버 후 → 타이틀로 복귀
   _restart() {
     this.player = new Player(160, GROUND_Y - 72);
     this.banner = '';
+    this._loadStage(1);
+    this.storyPage = 0;
+    this.state = GAME_STATE.TITLE;
+  }
+
+  // 스토리 끝 → 실제 플레이 시작
+  _beginGame() {
+    this.player = new Player(160, GROUND_Y - 72);
+    this.banner = '';
+    this._questGiven = false;
+    this.notice = ''; this.noticeTimer = 0;
     this._loadStage(1);
     this.state = GAME_STATE.PLAYING;
   }
 
   _loadStage(n) {
-    this.stage     = n;
-    this.stageData = buildStage(n);
-    this.camX      = 0;
-    this.nearDoor  = null;
+    this.stage      = n;
+    this.stageData  = buildStage(n);
+    this.camX       = 0;
+    this.nearDoor   = null;
+    this.inBossRoom = false;
+    this.projectiles = [];
+    this.enemyShots  = [];
+    this.pickups     = (this.stageData.pickups || []).slice();
     this.shop.close();
     // 라운드 시작 위치로 플레이어 복귀 (장비/점수/하트는 유지)
     const p = this.player;
@@ -40,6 +69,7 @@ export class Game {
   start() { requestAnimationFrame(this._loop); }
 
   _loop() {
+    this.frame++;
     this.input.update();
     this.update();
     this.draw();
@@ -55,10 +85,34 @@ export class Game {
     }
 
     switch (this.state) {
+      case GAME_STATE.TITLE:       this._updateTitle();      break;
+      case GAME_STATE.STORY:       this._updateStory();      break;
       case GAME_STATE.PLAYING:     this._updatePlaying();    break;
       case GAME_STATE.STAGE_CLEAR: this._updateStageClear(); break;
       case GAME_STATE.GAME_OVER:   this._updateGameOver();   break;
       case GAME_STATE.WIN:         this._updateWin();        break;
+    }
+    this._syncMusic();
+  }
+
+  // 상태에 맞는 BGM 자동 전환 (같은 트랙이면 무시됨)
+  _syncMusic() {
+    let track = null;
+    if (this.state === GAME_STATE.TITLE || this.state === GAME_STATE.STORY) track = 'title';
+    else if (this.state === GAME_STATE.PLAYING || this.state === GAME_STATE.STAGE_CLEAR)
+      track = this.inBossRoom ? 'boss' : 'field';
+    if (track) audio.playMusic(track); else audio.stopMusic();
+  }
+
+  _updateTitle() {
+    if (this._confirmPressed()) { audio.sfx('confirm'); this.state = GAME_STATE.STORY; this.storyPage = 0; }
+  }
+
+  _updateStory() {
+    if (this._confirmPressed()) {
+      audio.sfx('confirm');
+      this.storyPage++;
+      if (this.storyPage >= STORY_PAGES.length) this._beginGame();
     }
   }
 
@@ -67,8 +121,40 @@ export class Game {
 
     player.update(input, stageData.platforms);
 
-    // 하트 소진(피격 또는 타이머 누적) → 게임오버
-    if (player.hp <= 0) { this.state = GAME_STATE.GAME_OVER; return; }
+    if (this.noticeTimer > 0) this.noticeTimer--;
+
+    // 하트 소진 시: 물약 있으면 자동 사용(+5 회복), 없으면 게임오버
+    if (player.hp <= 0) {
+      if (player.inventory.potion > 0) {
+        player.inventory.potion--;
+        player.hp = Math.min(player.maxHp, 5);
+        player.invincible = 90;
+        audio.sfx('coin');
+        this._notice('물약을 사용해 되살아났다!', 120);
+      } else {
+        this.state = GAME_STATE.GAME_OVER; return;
+      }
+    }
+
+    // 1라운드: 검을 받기 전엔 장애물이 길을 막음
+    const gate = stageData.gate;
+    if (gate && player.eq.sword.id === 'none' && player.x + player.w > gate.x) {
+      player.x = gate.x - player.w;
+      if (player.vx > 0) player.vx = 0;
+    }
+
+    // 보스 방 입장 감지 → 보스 활성화 + 입구 봉쇄
+    const room = stageData.bossRoom;
+    if (room && !this.inBossRoom && player.x + player.w > room.x + 24) {
+      this.inBossRoom = true;
+      if (stageData.boss) stageData.boss.active = true;
+      audio.sfx('roomlock');
+    }
+    // 입장 후엔 방 왼쪽 벽 밖으로 못 나감
+    if (this.inBossRoom) {
+      const leftWall = room.x + 18;
+      if (player.x < leftWall) { player.x = leftWall; if (player.vx < 0) player.vx = 0; }
+    }
 
     // 카메라
     const targetCamX = player.x - VIEW_W / 2 + player.w / 2;
@@ -77,17 +163,25 @@ export class Game {
     // 일반 적
     for (const e of stageData.enemies) {
       if (e.dead && e.deathTimer <= 0) continue;
-      e.update(stageData.platforms);
+      e.update(stageData.platforms, player);
+      if (e.pendingShot) {
+        const s = e.pendingShot; e.pendingShot = null;
+        this.enemyShots.push(new EnemyShot(s.type, s.x, s.y, s.dir, s.atk));
+      }
       if (!e.dead) this._resolveCombat(e);
     }
+    this._updateEnemyShots();
 
-    // 보스
+    // 보스 (방에 입장해 활성화된 뒤에만 동작)
     const boss = stageData.boss;
-    if (boss && !(boss.dead && boss.deathTimer <= 0)) {
+    if (boss && boss.active && !(boss.dead && boss.deathTimer <= 0)) {
       boss.update(stageData.platforms, player);
       if (!boss.dead) this._resolveCombat(boss);
       if (boss.dead && !boss._rewarded) {
         boss._rewarded = true;
+        audio.sfx('bossdown');
+        player.hp = Math.min(player.maxHp, player.hp + 1);   // 원작: 보스 격파 시 하트 1칸 회복
+        player.inventory.key++;                              // 성문 열쇠 드롭
         if (boss.swordReward) player.awardSword(boss.swordReward);
         this._toStageClear(boss);
       }
@@ -100,8 +194,144 @@ export class Game {
       if (dist < DOOR_INTERACT_DIST) { this.nearDoor = d; break; }
     }
     if (this.nearDoor && input.wasPressed('ArrowUp')) {
-      this.shop.openShop(this.nearDoor.type, player);
+      if (this.nearDoor.type === 'quest') this._questGift();
+      else this.shop.openShop(this.nearDoor.type, player, this.stage);
     }
+
+    // 서브웨폰 발동 (아래 방향키)
+    if (input.wasPressed('ArrowDown')) this._castMagic();
+    this._updateProjectiles();
+    this._updatePickups();
+  }
+
+  _notice(text, t) { this.notice = text; this.noticeTimer = t; }
+
+  // 1라운드 첫 NPC: 그라디우스 검 + 물약 지급 (받기 전엔 길이 막혀 진행 불가)
+  _questGift() {
+    const p = this.player;
+    if (this._questGiven) { this._notice('이미 검과 물약을 받았다.', 90); return; }
+    this._questGiven = true;
+    p.awardSword(SWORD.gradius);
+    p.inventory.potion += 1;
+    audio.sfx('clear');
+    this._notice('용사여! 이 검과 물약을 받아 몬스터랜드를 구해다오!', 260);
+  }
+
+  _allTargets() {
+    const t = this.stageData.enemies.filter(e => !(e.dead && e.deathTimer <= 0));
+    const b = this.stageData.boss;
+    if (b && b.active && !(b.dead && b.deathTimer <= 0)) t.push(b);
+    return t;
+  }
+
+  _onEnemyKilled(e) {
+    this.player.gold  += e.gold;
+    this.player.score += e.score;
+    audio.sfx('enemydown');
+    this._dropLoot(e);
+  }
+
+  // 적 처치 시 확률 드롭. 큰 돈주머니/하트가 튀어나와 직접 주워야 함(원작 보너스 감각)
+  _dropLoot(e) {
+    if (e.isBoss) return;                       // 보스는 별도 보상(하트+열쇠+검)
+    const dx = e.x + e.w / 2 - 8, dy = e.y;
+    const r = Math.random();
+    if (r < 0.10) {
+      this.pickups.push(new Pickup('heart', dx, dy, { vy: -4, vx: (Math.random() - 0.5) * 2, life: 600 }));
+    } else if (r < 0.30) {
+      this.pickups.push(new Pickup('gold', dx, dy, { vy: -3.5, vx: (Math.random() - 0.5) * 2, amount: e.gold * 3, life: 600 }));
+    }
+  }
+
+  _updatePickups() {
+    const { player } = this;
+    const pb = { x: player.x, y: player.y, w: player.w, h: player.h };
+    for (const pk of this.pickups) {
+      if (pk.dead) continue;
+      pk.update(this.stageData.platforms);
+      if (_overlap(pk.getHitbox(), pb)) { this._collectPickup(pk); pk.dead = true; }
+    }
+    this.pickups = this.pickups.filter(pk => !pk.dead);
+  }
+
+  _collectPickup(pk) {
+    const p = this.player;
+    switch (pk.type) {
+      case 'gold':
+        p.gold += pk.amount; audio.sfx('coin'); this._notice(`+${pk.amount} G`, 60); break;
+      case 'heart':
+        if (p.maxHp < 10) p.maxHp++;
+        p.hp = Math.min(p.maxHp, p.hp + 1);
+        audio.sfx('coin'); this._notice('하트 획득! 최대 체력 +1', 100); break;
+      case 'potion':
+        p.inventory.potion++; audio.sfx('coin'); this._notice('물약 획득', 90); break;
+      case 'helmet':
+        p.gainBuff('helmet'); audio.sfx('clear'); this._notice('투구! 잠시 방어가 강해진다', 110); break;
+      case 'gauntlet':
+        p.gainBuff('gauntlet'); audio.sfx('clear'); this._notice('건틀릿! 잠시 공격력 +2', 110); break;
+      case 'wingboots':
+        p.gainBuff('wingboots'); audio.sfx('clear'); this._notice('날개신발! 잠시 높이 도약', 110); break;
+    }
+  }
+
+  _castMagic() {
+    const { player } = this;
+    const m = player.useMagic();
+    if (!m) { audio.sfx('magic_empty'); return; }
+    const swordAtk = player.swordAtk();
+
+    if (m.kind === 'thunder') {
+      // 즉발: 화면 내 모든 적에게 '검 공격력' 일괄 1회
+      const dmg = Math.max(1, swordAtk);
+      for (const e of this._allTargets()) {
+        e.takeDamage(dmg);
+        if (e.dead) this._onEnemyKilled(e);
+      }
+      audio.sfx('magic_thunder');
+    } else {
+      audio.sfx('magic_' + m.kind);   // magic_roll / magic_fly / magic_tornado
+    }
+
+    const px = player.facing === 1 ? player.x + player.w : player.x - 18;
+    const py = player.y + (m.kind === 'fly' ? 28 : 40);
+    this.projectiles.push(new Projectile(m, px, py, player.facing, swordAtk));
+  }
+
+  _updateProjectiles() {
+    const len = this.stageData.groundLen;
+    for (const p of this.projectiles) {
+      if (p.dead) continue;
+      p.update();
+      if (p.x < -60 || p.x > len + 60) { p.dead = true; continue; }
+      if (p.kind === 'thunder') continue;  // 피해는 시전 시 처리
+
+      for (const e of this._allTargets()) {
+        if (!_overlap(p.getHitbox(), e.getHitbox())) continue;
+        const dmg = p.damageFor(e);
+        if (dmg > 0) {
+          e.takeDamage(dmg);
+          if (e.dead) this._onEnemyKilled(e);
+          else e.hitKnockback(p.x + p.w / 2, 3);
+        }
+        if (p.dead) break;
+      }
+    }
+    this.projectiles = this.projectiles.filter(p => !p.dead);
+  }
+
+  _updateEnemyShots() {
+    const { player } = this;
+    const len = this.stageData.groundLen;
+    for (const s of this.enemyShots) {
+      if (s.dead) continue;
+      s.update();
+      if (s.x < -40 || s.x > len + 40) { s.dead = true; continue; }
+      if (player.invincible === 0 && _overlap(s.getHitbox(), { x: player.x, y: player.y, w: player.w, h: player.h })) {
+        if (player.takeDamage(s.atk, 'projectile')) audio.sfx('hurt');   // 방패로 경감/차단
+        s.dead = true;
+      }
+    }
+    this.enemyShots = this.enemyShots.filter(s => !s.dead);
   }
 
   // 플레이어↔대상(적/보스) 공방 처리
@@ -110,15 +340,16 @@ export class Game {
 
     const atkBox = player.getAttackBox();
     if (atkBox && !player.attackHit && _overlap(atkBox, e.getHitbox())) {
-      e.takeDamage(player.eq.sword?.atk ?? 1);
-      if (e.dead) { player.gold += e.gold; player.score += e.score; }
+      e.takeDamage(Math.max(1, player.swordAtk()));
+      if (!e.dead) { e.hitKnockback(player.x + player.w / 2); audio.sfx('hit'); }  // 원작: 적도 넉백
+      else this._onEnemyKilled(e);
       player.attackHit = true;
     }
 
     if (player.invincible === 0) {
       const pb = { x: player.x, y: player.y, w: player.w, h: player.h };
       if (_overlap(pb, e.getHitbox())) {
-        player.takeDamage(e.atk);
+        if (player.takeDamage(e.atk)) audio.sfx('hurt');
         player.knockback(e.x + e.w / 2);
       }
     }
@@ -126,6 +357,7 @@ export class Game {
 
   _toStageClear(boss) {
     if (this.stageData.final) { this.state = GAME_STATE.WIN; return; }
+    audio.sfx('clear');
     this.banner = boss.swordReward
       ? `${this.stageData.roundName} 격파!   ${boss.swordReward.name} 획득!`
       : `${this.stageData.roundName} 격파!`;
@@ -134,13 +366,14 @@ export class Game {
 
   _updateStageClear() {
     if (this._confirmPressed()) {
+      audio.sfx('confirm');
       this._loadStage(this.stage + 1);
       this.state = GAME_STATE.PLAYING;
     }
   }
 
-  _updateGameOver() { if (this._confirmPressed()) this._restart(); }
-  _updateWin()      { if (this._confirmPressed()) this._restart(); }
+  _updateGameOver() { if (this._confirmPressed()) { audio.sfx('confirm'); this._restart(); } }
+  _updateWin()      { if (this._confirmPressed()) { audio.sfx('confirm'); this._restart(); } }
 
   _confirmPressed() {
     const i = this.input;
@@ -153,12 +386,29 @@ export class Game {
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
 
+    // 타이틀 / 스토리 화면은 전체 화면 전용 렌더
+    if (this.state === GAME_STATE.TITLE) { drawTitle(ctx, this.frame); return; }
+    if (this.state === GAME_STATE.STORY) { drawStory(ctx, this.storyPage, this.frame); return; }
+
     // 배경 + 스테이지 (HUD 오른쪽 영역 클립)
     ctx.save();
     ctx.beginPath();
     ctx.rect(HUD_W, 0, VIEW_W, CANVAS_H);
     ctx.clip();
-    drawStage(ctx, stageData, camX);
+    drawStage(ctx, stageData, camX, this.inBossRoom);
+    for (const pk of this.pickups) pk.draw(ctx, camX);
+    for (const p of this.projectiles) p.draw(ctx, camX);
+    for (const s of this.enemyShots) s.draw(ctx, camX);
+
+    // 1라운드 장애물 (검 받기 전 통행 차단)
+    const gate = stageData.gate;
+    if (gate && player.eq.sword.id === 'none') {
+      const gx = Math.round(gate.x - camX + HUD_W);
+      ctx.fillStyle = '#5a5a5a'; ctx.fillRect(gx, gate.y, gate.w, gate.h);
+      ctx.fillStyle = '#777777'; ctx.fillRect(gx + 2, gate.y + 2, gate.w - 4, 8);
+      ctx.fillStyle = '#3a3a3a'; ctx.fillRect(gx + 4, gate.y + 14, gate.w - 8, gate.h - 18);
+      ctx.fillStyle = '#222222'; ctx.fillRect(gx + gate.w / 2 - 1, gate.y, 2, gate.h);
+    }
     ctx.restore();
 
     player.draw(ctx, camX);
@@ -175,6 +425,16 @@ export class Game {
 
     drawHUD(ctx, player, this.stage);
     this.shop.draw(ctx);
+
+    // 화면 하단 안내 메시지 (NPC 대사, 물약 사용 등)
+    if (this.noticeTimer > 0 && !this.shop.open) {
+      const w = VIEW_W - 40, nx = HUD_W + 20, ny = CANVAS_H - 56;
+      ctx.fillStyle = 'rgba(0,0,0,0.80)'; ctx.fillRect(nx, ny, w, 34);
+      ctx.strokeStyle = '#ffdd44'; ctx.lineWidth = 1; ctx.strokeRect(nx, ny, w, 34);
+      ctx.fillStyle = '#ffee99'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center';
+      ctx.fillText(this.notice, HUD_W + VIEW_W / 2, ny + 22);
+      ctx.textAlign = 'left';
+    }
 
     if (this.state === GAME_STATE.STAGE_CLEAR)
       this._overlay(ctx, this.banner, 'Z / ENTER : 다음 라운드', '#40ff80');

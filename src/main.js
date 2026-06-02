@@ -1,6 +1,16 @@
 import { Game } from './game.js';
 import { CANVAS_W, CANVAS_H } from './constants.js';
 import { loadAssets } from './assets.js';
+import { audio } from './audio.js';
+
+// 브라우저 자동재생 정책: 첫 사용자 입력에서 오디오 컨텍스트 활성화
+function _wakeAudio() {
+  audio.resume();
+  window.removeEventListener('keydown', _wakeAudio);
+  window.removeEventListener('pointerdown', _wakeAudio);
+}
+window.addEventListener('keydown', _wakeAudio);
+window.addEventListener('pointerdown', _wakeAudio);
 
 const canvas = document.getElementById('gameCanvas');
 const dpr = window.devicePixelRatio || 1;

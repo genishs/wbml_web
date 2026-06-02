@@ -1,3 +1,5 @@
+export const GAME_VERSION = 'v0.1.0';   // SemVer + git 태그와 동기화 (타이틀에 표기)
+
 export const CANVAS_W = 640;
 export const CANVAS_H = 360;
 export const HUD_W = 112;        // 왼쪽 HUD 너비
@@ -12,6 +14,7 @@ export const GROUND_Y = 300;     // 지면 y좌표 (발이 닿는 위치)
 
 export const GAME_STATE = {
   TITLE:       'title',
+  STORY:       'story',
   PLAYING:     'playing',
   SHOP:        'shop',
   GAME_OVER:   'gameover',

@@ -47,13 +47,25 @@ export function drawHUD(ctx, player, stageNum) {
 
   _hline(ctx, y); y += 4;
 
-  // ── 장비 슬롯 ──
+  // ── MAGIC (활성 서브웨폰) ──
+  ctx.fillStyle = '#cc88ff';
+  ctx.font = 'bold 8px monospace';
+  ctx.fillText('MAGIC', HUD_W / 2, y + 8);
+  const am = player.activeMagic();
+  ctx.font = '8px monospace';
+  if (am) { ctx.fillStyle = '#ffffff'; ctx.fillText(`${am.magic.name} ×${am.count}`, HUD_W / 2, y + 19); }
+  else    { ctx.fillStyle = '#555555'; ctx.fillText('없음', HUD_W / 2, y + 19); }
+  y += 24;
+
+  _hline(ctx, y); y += 4;
+
+  // ── ITEM (소지품 6슬롯) ──
   ctx.fillStyle = '#aaaaaa';
   ctx.font = 'bold 7px monospace';
-  ctx.fillText('EQUIP', HUD_W / 2, y + 8);
-  y += 10;
-  _drawEquipGrid(ctx, player.eq, y);
-  y += 74;
+  ctx.fillText('ITEM', HUD_W / 2, y + 8);
+  y += 11;
+  _drawInventoryGrid(ctx, player, y);
+  y += 66;
 
   _hline(ctx, y); y += 4;
 
@@ -101,6 +113,60 @@ function _drawHeart(ctx, x, y, size) {
   ctx.bezierCurveTo(x + size, y, x + size, y + size * 0.4, x + size / 2, y + size * 0.85);
   ctx.closePath();
   ctx.fill();
+}
+
+function _drawInventoryGrid(ctx, player, y) {
+  const inv = player.inventory;
+  const slots = [
+    { key: 'helmet',    has: inv.helmet > 0,    n: inv.helmet },
+    { key: 'gauntlet',  has: inv.gauntlet > 0,  n: inv.gauntlet },
+    { key: 'wingboots', has: inv.wingboots > 0, n: inv.wingboots },
+    { key: 'key',       has: inv.key > 0,       n: inv.key },
+    { key: 'potion',    has: inv.potion > 0,    n: inv.potion },
+    { key: 'story',     has: !!inv.story,       n: 0 },
+  ];
+  const cols = 3, cw = 34, ch = 30, sx0 = (HUD_W - cols * cw) / 2;
+  ctx.textAlign = 'center';
+  slots.forEach((s, i) => {
+    const col = i % cols, row = Math.floor(i / cols);
+    const sx = sx0 + col * cw, sy = y + row * ch;
+    ctx.fillStyle = s.has ? '#2a2040' : '#111111';
+    ctx.fillRect(sx + 1, sy + 1, cw - 2, ch - 2);
+    ctx.strokeStyle = s.has ? '#6040cc' : '#333333';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx + 1, sy + 1, cw - 2, ch - 2);
+    const ccx = sx + cw / 2, ccy = sy + ch / 2;
+    if (s.has) _drawInvIcon(ctx, s.key, ccx, ccy);
+    else { ctx.fillStyle = '#333333'; ctx.font = '8px monospace'; ctx.fillText('·', ccx, ccy + 3); }
+    if (s.n > 1) {
+      ctx.fillStyle = '#ffdd44'; ctx.font = 'bold 8px monospace'; ctx.textAlign = 'right';
+      ctx.fillText('×' + s.n, sx + cw - 3, sy + ch - 3); ctx.textAlign = 'center';
+    }
+  });
+}
+
+function _drawInvIcon(ctx, key, x, y) {
+  switch (key) {
+    case 'helmet':
+      ctx.fillStyle = '#88bbff'; ctx.fillRect(x - 6, y - 1, 12, 4);
+      ctx.beginPath(); ctx.arc(x, y, 6, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = '#ee0000'; ctx.fillRect(x - 1, y - 9, 2, 5); break;
+    case 'gauntlet':
+      ctx.fillStyle = '#ffcc00'; ctx.fillRect(x - 5, y - 3, 10, 8); ctx.fillRect(x - 6, y - 6, 4, 5); break;
+    case 'wingboots':
+      ctx.fillStyle = '#774433'; ctx.fillRect(x - 1, y - 5, 6, 9); ctx.fillRect(x - 1, y + 2, 9, 3);
+      ctx.fillStyle = '#ffffff'; ctx.beginPath();
+      ctx.moveTo(x - 2, y - 4); ctx.lineTo(x - 9, y - 7); ctx.lineTo(x - 2, y + 2); ctx.closePath(); ctx.fill(); break;
+    case 'key':
+      ctx.fillStyle = '#ffcc00'; ctx.beginPath(); ctx.arc(x - 4, y, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillRect(x - 1, y - 1, 9, 2); ctx.fillRect(x + 6, y - 1, 2, 4); break;
+    case 'potion':
+      ctx.fillStyle = '#aaaaaa'; ctx.fillRect(x - 2, y - 7, 4, 3);
+      ctx.fillStyle = '#cccccc'; ctx.fillRect(x - 4, y - 4, 8, 9);
+      ctx.fillStyle = '#ee0000'; ctx.fillRect(x - 3, y - 1, 6, 5); break;
+    case 'story':
+      ctx.fillStyle = '#ffee00'; ctx.font = 'bold 13px monospace'; ctx.fillText('★', x, y + 4); break;
+  }
 }
 
 function _drawEquipGrid(ctx, eq, y) {
