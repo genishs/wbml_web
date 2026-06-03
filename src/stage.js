@@ -65,6 +65,15 @@ function makeDoor(id, x, type) {
   return { id, x, y: GROUND_Y - 52, w: 36, h: 52, type };
 }
 
+// 보스 문(검 보스/스테이지 보스 공용). 더 크고 위압적. boss=대상 Boss, drop='sword'|'key'.
+function makeBossDoor(id, x, type, boss, drop) {
+  const d = makeDoor(id, x, type);
+  d.y = GROUND_Y - 70; d.w = 48; d.h = 70;
+  d.boss = boss; d.drop = drop; d.cleared = false;
+  if (drop === 'sword') d.swordReward = boss.swordReward;
+  return d;
+}
+
 export function buildStage(stageNum) {
   const round  = getRound(stageNum);
   const dir    = round.dir || 'LR';
@@ -78,6 +87,19 @@ export function buildStage(stageNum) {
   const enemies   = [];
   const doors     = [];
   const pickups   = [];
+
+  // 보스 체인(스탯). 단일 보스 라운드는 1체, 2단 라운드(R2/R5/R7/R8)는 2체.
+  // 원작 구조: 검 보스(X-1)는 별도 문/방 → 처치 시 검 드롭. 마지막=스테이지 보스 → 열쇠 드롭.
+  const chainSpec = round.chain || [{
+    name: round.name, type: round.boss, hp: round.hp, score: round.score, sword: round.sword,
+  }];
+  const bossChain = chainSpec.map(s => new Boss(s.type, fieldLen, GROUND_Y - 48, {
+    name: s.name, hp: s.hp, score: s.score,
+    swordReward: s.sword ? SWORD[s.sword] : null,
+  }));
+  const boss       = bossChain[0];
+  const stageBoss  = bossChain[bossChain.length - 1];          // 열쇠 드롭(스테이지 보스)
+  const swordBosses = bossChain.slice(0, -1);                  // 검 드롭(별도 방)
 
   // 세그먼트를 왼쪽부터 깔며 각 구역에 요소 배치 (마을→필드→다층→보스문)
   let cursor = 0, ei = 0, bossDoor = null;
@@ -119,8 +141,7 @@ export function buildStage(stageNum) {
       const ey = enemyAirborne(t) ? GROUND_Y - 150 : GROUND_Y - 90;
       enemies.push(new Enemy(t, mid, ey, { patrolMin: mid - 60, patrolMax: mid + 60 }));
     } else if (seg.type === 'bossgate') {
-      bossDoor = makeDoor('boss-door', mid - 24, 'boss');
-      bossDoor.y = GROUND_Y - 70; bossDoor.w = 48; bossDoor.h = 70;   // 보스문은 더 크고 위압적
+      bossDoor = makeBossDoor('boss-door', mid - 24, 'boss', stageBoss, 'key');
       doors.push(bossDoor);
     }
     cursor = x1;
@@ -136,37 +157,37 @@ export function buildStage(stageNum) {
     doors.push(makeDoor('bar', t.x0 + 40, 'bar'));
   }
 
+  // 검 보스 문(2단 라운드의 X-1): 스테이지 중반 별도 방. 처치 시 검을 떨어뜨리고 방을 나온다.
+  swordBosses.forEach((sb, i) => {
+    const sx = Math.round(fieldLen * (0.38 + i * 0.18));
+    doors.push(makeBossDoor('sword-door-' + i, sx, 'swordboss', sb, 'sword'));
+  });
+
+  // 성문(스테이지 출구): 필드 끝. 열쇠 보유 시 통과해 클리어. 보스방 안이 아니라 필드에 있음.
+  const castleGate = { x: groundLen - 100, y: GROUND_Y - 132, w: 60, h: 132 };
+
   // R1: 첫 NPC(그라디우스 + 물약) 직후, 검 받기 전 길을 막는 장애물
   const gate = stageNum === 1 ? { x: 250, y: GROUND_Y - 90, w: 26, h: 90 } : null;
 
-  // 보스 체인(스탯). 단일 보스 라운드는 1체, 2단 라운드(R2/R5/R7/R8)는 2체.
-  // X-1=검 드롭, 마지막 보스=열쇠 드롭. 위치/순찰은 아레나 입장 시 설정됨.
-  const chainSpec = round.chain || [{
-    name: round.name, type: round.boss, hp: round.hp, score: round.score, sword: round.sword,
-  }];
-  const bossChain = chainSpec.map(s => new Boss(s.type, fieldLen, GROUND_Y - 48, {
-    name: s.name, hp: s.hp, score: s.score,
-    swordReward: s.sword ? SWORD[s.sword] : null,
-  }));
-  const boss = bossChain[0];
-
   return {
-    platforms, enemies, doors, boss, bossChain, groundLen, gate, pickups, bossDoor, dir,
+    platforms, enemies, doors, boss, bossChain, groundLen, gate, castleGate, pickups, bossDoor, dir,
     sky: round.sky, roundName: round.name, final: !!round.final,
   };
 }
 
-export function drawStage(ctx, stageData, camX) {
+export function drawStage(ctx, stageData, camX, hasKey) {
   const { platforms, enemies, doors } = stageData;
   _drawSky(ctx, stageData.sky);
   _drawPlatforms(ctx, platforms, camX);
   _drawDoors(ctx, doors, camX);
+  _drawCastleGate(ctx, stageData.castleGate, camX, hasKey);   // 스테이지 끝 성문(필드)
   for (const e of enemies) e.draw(ctx, camX);
 }
 
-// 보스방(아레나): 문을 열고 들어가면 나오는 화면 가득한 석조 방. 보스를 직접 상대.
-// 격파 후 열쇠로 우측 성문을 열어 클리어. camX는 항상 0(한 화면 고정).
-export function drawArena(ctx, arena, boss, hasKey) {
+// 보스방(아레나): 문을 열고 들어가면 나오는 화면 가득한 석조 전투방. 보스를 직접 상대.
+// 성문은 방 안이 아니라 필드(스테이지 끝)에 있다. 보스 처치→보상(검/열쇠) 드롭→주우면 방을 나온다.
+// camX는 항상 0(한 화면 고정).
+export function drawArena(ctx, arena, boss) {
   const L = HUD_W, R = HUD_W + VIEW_W;
   // 뒷벽 + 벽돌
   ctx.fillStyle = '#241c2e'; ctx.fillRect(L, 0, VIEW_W, GROUND_Y);
@@ -182,14 +203,13 @@ export function drawArena(ctx, arena, boss, hasKey) {
   ctx.fillStyle = '#37303f'; ctx.fillRect(L, GROUND_Y, VIEW_W, 60);
   ctx.fillStyle = '#2a2433';
   for (let x = L; x < R; x += 32) ctx.fillRect(x, GROUND_Y, 2, 60);
-  // 좌측 입구(닫힌 철문 — 가둠 연출) + 횃불
-  ctx.fillStyle = '#1a1422'; ctx.fillRect(L, 0, 14, GROUND_Y);
+  // 좌우 입구(닫힌 철문 — 가둠 연출) + 횃불
+  ctx.fillStyle = '#1a1422';
+  ctx.fillRect(L, 0, 14, GROUND_Y); ctx.fillRect(R - 14, 0, 14, GROUND_Y);
   ctx.fillStyle = '#5a5a6a';
-  for (let by = 0; by < GROUND_Y; by += 16) ctx.fillRect(L, by, 12, 12);
+  for (let by = 0; by < GROUND_Y; by += 16) { ctx.fillRect(L, by, 12, 12); ctx.fillRect(R - 12, by, 12, 12); }
   _torch(ctx, L + 26, GROUND_Y - 120);
   _torch(ctx, R - 64, GROUND_Y - 120);
-  // 우측 성문 + 보스
-  _drawCastleGate(ctx, arena.castleGate, 0, hasKey);
   if (boss && !(boss.dead && boss.deathTimer <= 0)) boss.draw(ctx, 0);
 }
 
@@ -273,7 +293,7 @@ function _drawDoors(ctx, doors, camX) {
     const sx = d.x - camX + HUD_W;
     if (sx + d.w < HUD_W || sx > 640) continue;
 
-    if (d.type === 'boss') { _drawBossDoor(ctx, sx, d); continue; }
+    if (d.type === 'boss' || d.type === 'swordboss') { _drawBossDoor(ctx, sx, d); continue; }
 
     // 문 틀
     ctx.fillStyle = '#6a4820';
@@ -295,20 +315,35 @@ function _drawDoors(ctx, doors, camX) {
   }
 }
 
-// 보스문: 해골이 박힌 위압적인 석문(아치). 열고 들어가면 보스방으로 전환.
+// 보스문: 위압적인 석문(아치). 열고 들어가면 보스방으로 전환.
+//  boss      = 스테이지 보스(열쇠) — 해골 장식 / swordboss = 검 보스 — 검 장식
+//  d.cleared = 이미 처치 → 어둑하게 + CLEAR 표시
 function _drawBossDoor(ctx, sx, d) {
-  ctx.fillStyle = '#3a2030';                       // 석문 기둥
+  const isSword = d.type === 'swordboss';
+  ctx.fillStyle = isSword ? '#1f2a3a' : '#3a2030';  // 석문 기둥
   ctx.fillRect(sx - 6, d.y - 16, d.w + 12, d.h + 16);
-  ctx.fillStyle = '#0a0508';                        // 아치 내부(어둠)
+  ctx.fillStyle = '#0a0508';                         // 아치 내부(어둠)
   ctx.fillRect(sx + 3, d.y, d.w - 6, d.h);
   ctx.beginPath(); ctx.arc(sx + d.w / 2, d.y, d.w / 2 - 3, Math.PI, 0); ctx.fill();
-  // 해골 장식
-  const skx = sx + d.w / 2, sky = d.y - 6;
-  ctx.fillStyle = '#e8e0d0'; ctx.fillRect(skx - 5, sky - 5, 10, 9);
-  ctx.fillStyle = '#0a0508'; ctx.fillRect(skx - 4, sky - 2, 3, 3); ctx.fillRect(skx + 1, sky - 2, 3, 3);
-  // 라벨
-  ctx.fillStyle = '#ff5050'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
-  ctx.fillText('BOSS', sx + d.w / 2, d.y - 20); ctx.textAlign = 'left';
+
+  const mx = sx + d.w / 2, my = d.y - 6;
+  if (isSword) {                                      // 검 장식
+    ctx.fillStyle = '#caa030'; ctx.fillRect(mx - 5, my + 1, 10, 2);
+    ctx.fillStyle = '#cfd6e0'; ctx.fillRect(mx - 1, my - 6, 2, 10);
+  } else {                                            // 해골 장식
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(mx - 5, my - 5, 10, 9);
+    ctx.fillStyle = '#0a0508'; ctx.fillRect(mx - 4, my - 2, 3, 3); ctx.fillRect(mx + 1, my - 2, 3, 3);
+  }
+
+  ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
+  if (d.cleared) {
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(sx - 6, d.y - 16, d.w + 12, d.h + 16);  // 어둑
+    ctx.fillStyle = '#88cc88'; ctx.fillText('CLEAR', mx, d.y - 20);
+  } else {
+    ctx.fillStyle = isSword ? '#88bbff' : '#ff5050';
+    ctx.fillText(isSword ? 'SWORD' : 'BOSS', mx, d.y - 20);
+  }
+  ctx.textAlign = 'left';
 }
 
 function _torch(ctx, x, y) {

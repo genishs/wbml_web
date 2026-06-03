@@ -3,6 +3,8 @@
 //  heart     : 하트 컨테이너 — 최대 체력 +1 (원작의 숨겨진 하트)
 //  potion    : 소지품 물약 +1
 //  helmet/gauntlet/wingboots : 일정 시간 강화되는 시간제 아이템(획득 시 버프 발동)
+//  sword     : 검 보스가 방 안에 떨어뜨리는 보상 검(주우면 장착+방 탈출). opts.sword=SWORD 객체
+//  key       : 스테이지 보스가 떨어뜨리는 열쇠(주우면 방 탈출 → 성문 통과)
 import { GRAVITY, GROUND_Y, HUD_W } from './constants.js';
 
 const DEFS = {
@@ -12,6 +14,8 @@ const DEFS = {
   helmet:    { w: 18, h: 14 },
   gauntlet:  { w: 16, h: 14 },
   wingboots: { w: 18, h: 16 },
+  sword:     { w: 14, h: 24 },
+  key:       { w: 14, h: 18 },
 };
 
 export class Pickup {
@@ -22,6 +26,7 @@ export class Pickup {
     this.vx = opts.vx ?? 0;
     this.vy = opts.vy ?? 0;           // 드롭 시 위로 톡 튐
     this.amount = opts.amount ?? 0;    // gold 전용
+    this.sword  = opts.sword ?? null;  // sword 전용: 장착할 SWORD 객체
     this.onGround = opts.vy == null;   // 필드 배치물은 처음부터 지면
     this.dead = false;
     this.tick = (Math.random() * 60) | 0;
@@ -88,6 +93,23 @@ export class Pickup {
         ctx.fillStyle = '#774433'; ctx.fillRect(cx - 1, sy + 2, 6, this.h - 5); ctx.fillRect(cx - 1, sy + this.h - 4, 9, 3);
         ctx.fillStyle = '#ffffff'; ctx.beginPath();
         ctx.moveTo(cx - 2, sy + 4); ctx.lineTo(sx, sy); ctx.lineTo(cx - 2, sy + 9); ctx.closePath(); ctx.fill();
+        break;
+      case 'sword': {
+        const fl = (this.sword && this.sword.bladeColor) || '#dfe6f0';
+        ctx.fillStyle = '#caa030';                                   // 손잡이(가드)
+        ctx.fillRect(sx, sy + this.h - 8, this.w, 3);
+        ctx.fillStyle = '#7a4a20'; ctx.fillRect(cx - 1, sy + this.h - 6, 3, 6);
+        ctx.fillStyle = fl;                                          // 칼날
+        ctx.fillRect(cx - 2, sy, 4, this.h - 7);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(cx - 1, sy + 1, 1, this.h - 9); // 하이라이트
+        break;
+      }
+      case 'key':
+        ctx.fillStyle = '#ffcc00';
+        ctx.beginPath(); ctx.arc(cx, sy + 5, 5, 0, Math.PI * 2); ctx.fill();    // 고리
+        ctx.fillStyle = '#0a0810'; ctx.beginPath(); ctx.arc(cx, sy + 5, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffcc00'; ctx.fillRect(cx - 1, sy + 9, 2, this.h - 9); // 자루
+        ctx.fillRect(cx + 1, sy + this.h - 6, 4, 2); ctx.fillRect(cx + 1, sy + this.h - 2, 4, 2); // 이빨
         break;
       default:
         ctx.fillStyle = '#ffffff'; ctx.fillRect(sx, sy, this.w, this.h);

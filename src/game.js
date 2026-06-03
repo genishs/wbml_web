@@ -142,6 +142,19 @@ export class Game {
       if (player.vx > 0) player.vx = 0;
     }
 
+    // 스테이지 끝 성문: 열쇠 없으면 막힘 / 열쇠 들고 진입 → 스테이지 클리어
+    const cg = stageData.castleGate;
+    if (cg) {
+      if (player.inventory.key >= 1 && player.x + player.w > cg.x + cg.w * 0.4) {
+        player.inventory.key = 0;
+        this._toStageClear(stageData.bossChain[stageData.bossChain.length - 1]);
+        return;
+      } else if (player.inventory.key < 1 && player.x + player.w > cg.x) {
+        player.x = cg.x - player.w;
+        if (player.vx > 0) player.vx = 0;
+      }
+    }
+
     // 카메라
     const targetCamX = player.x - VIEW_W / 2 + player.w / 2;
     this.camX = Math.max(0, Math.min(targetCamX, stageData.groundLen - VIEW_W));
@@ -165,9 +178,12 @@ export class Game {
       if (dist < DOOR_INTERACT_DIST) { this.nearDoor = d; break; }
     }
     if (this.nearDoor && input.wasPressed('ArrowUp')) {
-      const t = this.nearDoor.type;
+      const d = this.nearDoor, t = d.type;
       if (t === 'quest')                      this._questGift();
-      else if (t === 'boss')                  this._enterBossArena();
+      else if (t === 'boss' || t === 'swordboss') {
+        if (d.cleared) this._notice('텅 빈 방이다.', 60);
+        else this._enterBossArena(d);
+      }
       else if (t === 'hospital' || t === 'bar') this.facility.openFacility(t, player, this.stage);
       else this.shop.openShop(t, player, this.stage);
     }
@@ -203,18 +219,21 @@ export class Game {
     boss.vx = -(boss.speed || 1); boss.tick = 0;
   }
 
-  // 보스문 진입 → 화면 가득한 보스방(아레나)으로 전환. 보스를 직접 상대.
-  // 2단 라운드(R2/R5/R7/R8)는 1번 방→격파→2번 방 순서로 이어진다.
-  _enterBossArena() {
-    const chain = this.stageData.bossChain;
-    this._placeBossInArena(chain[0]);
+  // 보스문 진입 → 화면 가득한 보스방(아레나). 보스를 직접 상대한다.
+  // 방은 전투 전용: 처치하면 보상(검/열쇠)이 방에 드롭, 주우면 방을 나와 필드로 복귀.
+  // 검 보스(swordboss)·스테이지 보스(boss) 모두 같은 흐름. 성문은 필드(스테이지 끝)에 있음.
+  _enterBossArena(door) {
+    const boss = door.boss;
+    this._placeBossInArena(boss);
+    this._fieldPickups = this.pickups;                 // 필드 수집물 보존(복귀 시 복원)
 
     this.arena = {
-      platforms:  [{ x: 0, y: GROUND_Y, w: VIEW_W, h: 60, isGround: true }],
-      castleGate: { x: VIEW_W - 74, y: GROUND_Y - 132, w: 60, h: 132 },
-      groundLen:  VIEW_W,
-      sky: this.stageData.sky,
-      chain, bossIndex: 0, boss: chain[0],
+      platforms: [{ x: 0, y: GROUND_Y, w: VIEW_W, h: 60, isGround: true }],
+      groundLen: VIEW_W, sky: this.stageData.sky,
+      boss, door, drop: door.drop,
+      swordReward: door.swordReward || boss.swordReward,
+      returnX: door.x + door.w / 2,
+      dropped: false,
     };
     const p = this.player;
     p.x = 40; p.y = GROUND_Y - p.h; p.vx = 0; p.vy = 0; p.invincible = 40;
@@ -222,8 +241,22 @@ export class Game {
     this.camX = 0; this.nearDoor = null;
     this.projectiles = []; this.enemyShots = []; this.pickups = [];
     audio.sfx('roomlock');
-    const more = chain.length > 1 ? `   (1/${chain.length})` : '';
-    this._notice(`${chain[0].name} 등장!${more}`, 150);
+    this._notice(`${boss.name} 등장!`, 150);
+  }
+
+  // 보상 수집 후 방을 나와 필드로 복귀(들어온 문 위치). 문은 처치완료 표시.
+  _exitBossArena() {
+    const returnX = this.arena.returnX;
+    this.arena.door.cleared = true;
+    this.arena = null;
+    this.pickups = this._fieldPickups || [];
+    this.projectiles = []; this.enemyShots = [];
+    const p = this.player;
+    p.x = returnX - p.w / 2; p.y = GROUND_Y - p.h; p.vx = 0; p.vy = 0;
+    p.invincible = 40; p.state = 'idle';
+    this.camX = Math.max(0, Math.min(p.x - VIEW_W / 2 + p.w / 2, this.stageData.groundLen - VIEW_W));
+    this.nearDoor = null;
+    audio.sfx('roomlock');
   }
 
   _updateArena() {
@@ -236,49 +269,44 @@ export class Game {
 
     this.camX = 0;
     if (player.x < 0) { player.x = 0; if (player.vx < 0) player.vx = 0; }
+    if (player.x > VIEW_W - player.w) player.x = VIEW_W - player.w;    // 우측 벽
 
     // 보스 행동/공방
     if (boss && !(boss.dead && boss.deathTimer <= 0)) {
       boss.update(arena.platforms, player);
       if (!boss.dead) this._resolveCombat(boss);
-      if (boss.dead && !boss._rewarded) {
-        boss._rewarded = true;
+      if (boss.dead && !arena.dropped) {
+        // 처치 → 보상(검/열쇠)을 방 안에 떨어뜨림. 아직 지급 안 함(주워야 함).
+        arena.dropped = true;
         audio.sfx('bossdown');
-        player.hp = Math.min(player.maxHp, player.hp + 1);   // 격파 시 하트 1칸 회복
-        if (boss.swordReward) player.awardSword(boss.swordReward);
-
-        const hasNext = arena.bossIndex < arena.chain.length - 1;
-        if (hasNext) {
-          // 2단 보스: 다음 방으로 — 열쇠는 아직 드롭되지 않음
-          arena.bossIndex++;
-          const next = arena.chain[arena.bossIndex];
-          arena.boss = next;
-          this._placeBossInArena(next);
-          player.x = 40; player.y = GROUND_Y - player.h; player.vx = 0; player.vy = 0;
-          player.invincible = 60;
-          this.projectiles = []; this.enemyShots = [];
-          audio.sfx('roomlock');
-          const swordMsg = boss.swordReward ? `${boss.swordReward.name} 획득!  ` : '';
-          this._notice(`${swordMsg}안쪽 방: ${next.name} 등장! (${arena.bossIndex + 1}/${arena.chain.length})`, 240);
-        } else {
-          // 마지막 보스: 열쇠 드롭 → 성문 개방
-          player.inventory.key = 1;
-          if (this.stageData.final) { this.state = GAME_STATE.WIN; return; }
-          this._notice('보스 격파! 열쇠로 성문을 열어라 →', 240);
-        }
+        player.hp = Math.min(player.maxHp, player.hp + 1);            // 격파 시 하트 1칸 회복
+        const dx = boss.x + boss.w / 2 - 8, dy = boss.y;
+        const opt = arena.drop === 'sword' ? { vy: -3.5, sword: arena.swordReward } : { vy: -3.5 };
+        this.pickups.push(new Pickup(arena.drop, dx, dy, opt));
+        this._notice(arena.drop === 'sword' ? '검을 떨어뜨렸다! 주워라' : '열쇠를 떨어뜨렸다! 주워라', 300);
       }
     }
 
-    // 성문: 열쇠 없으면 막힘 / 열쇠 들고 도달 → 클리어
-    const cg = arena.castleGate;
-    if (player.x + player.w > cg.x && player.inventory.key < 1) {
-      player.x = cg.x - player.w; if (player.vx > 0) player.vx = 0;
-    } else if (player.inventory.key >= 1 && player.x + player.w > cg.x + cg.w * 0.45) {
-      player.inventory.key = 0;
-      this._toStageClear(boss);
-      return;
+    // 방 안의 보상 수집 → 지급 후 방 탈출
+    for (const pk of this.pickups) {
+      if (pk.dead) continue;
+      pk.update(arena.platforms);
+      const pb = { x: player.x, y: player.y, w: player.w, h: player.h };
+      if (_overlap(pk.getHitbox(), pb)) {
+        pk.dead = true;
+        if (pk.type === 'sword') {
+          if (arena.swordReward) player.awardSword(arena.swordReward);
+          audio.sfx('clear');
+          this._notice(`${arena.swordReward ? arena.swordReward.name : '검'} 획득!`, 150);
+        } else {                                                       // key
+          player.inventory.key = 1;
+          audio.sfx('coin');
+          this._notice('열쇠 획득! 성문으로 →', 180);
+        }
+        this._exitBossArena();
+        return;
+      }
     }
-    if (player.x > VIEW_W - player.w) player.x = VIEW_W - player.w;   // 우측 벽
 
     if (input.wasPressed('ArrowDown')) this._castMagic();
     this._updateProjectiles();
@@ -482,9 +510,9 @@ export class Game {
     ctx.clip();
 
     if (this.arena) {
-      drawArena(ctx, this.arena, this.arena.boss, player.inventory.key >= 1);
+      drawArena(ctx, this.arena, this.arena.boss);
     } else {
-      drawStage(ctx, stageData, camX);
+      drawStage(ctx, stageData, camX, player.inventory.key >= 1);
       // 1라운드 장애물 (검 받기 전 통행 차단)
       const gate = stageData.gate;
       if (gate && player.eq.sword.id === 'none') {
