@@ -64,8 +64,13 @@ export class Game {
     this.shop.close();
     this.facility.close();
     // 라운드 시작 위치로 플레이어 복귀 (장비/점수/하트는 유지)
+    // RL 라운드는 우측에서 시작해 왼쪽으로 진행 → 우측 스폰 + 카메라 우측 시작.
     const p = this.player;
-    p.x = 160; p.y = GROUND_Y - 50; p.vx = 0; p.vy = 0;
+    const rl = this.stageData.dir === 'RL';
+    p.x = rl ? this.stageData.groundLen - 160 - p.w : 160;
+    p.facing = rl ? -1 : 1;
+    this.camX = rl ? Math.max(0, this.stageData.groundLen - VIEW_W) : 0;
+    p.y = GROUND_Y - 50; p.vx = 0; p.vy = 0;
     p.state = 'idle'; p.invincible = 0;
     p.timer = p.timerMax;
   }
@@ -142,16 +147,23 @@ export class Game {
       if (player.vx > 0) player.vx = 0;
     }
 
-    // 스테이지 끝 성문: 열쇠 없으면 막힘 / 열쇠 들고 진입 → 스테이지 클리어
+    // 스테이지 끝 성문: 열쇠 없으면 막힘 / 열쇠 들고 진입 → 스테이지 클리어.
+    // 진행방향에 따라 접근 면이 반대(LR=왼쪽에서, RL=오른쪽에서)라 충돌 방향을 분기.
     const cg = stageData.castleGate;
     if (cg) {
-      if (player.inventory.key >= 1 && player.x + player.w > cg.x + cg.w * 0.4) {
-        player.inventory.key = 0;
-        this._toStageClear(stageData.bossChain[stageData.bossChain.length - 1]);
-        return;
-      } else if (player.inventory.key < 1 && player.x + player.w > cg.x) {
-        player.x = cg.x - player.w;
-        if (player.vx > 0) player.vx = 0;
+      const rl = stageData.dir === 'RL';
+      const passed = rl ? (player.x < cg.x + cg.w * 0.6)
+                        : (player.x + player.w > cg.x + cg.w * 0.4);
+      if (player.inventory.key >= 1) {
+        if (passed) {
+          player.inventory.key = 0;
+          this._toStageClear(stageData.bossChain[stageData.bossChain.length - 1]);
+          return;
+        }
+      } else if (rl) {                              // RL: 오른쪽에서 막힘
+        if (player.x < cg.x + cg.w) { player.x = cg.x + cg.w; if (player.vx < 0) player.vx = 0; }
+      } else {                                      // LR: 왼쪽에서 막힘
+        if (player.x + player.w > cg.x) { player.x = cg.x - player.w; if (player.vx > 0) player.vx = 0; }
       }
     }
 

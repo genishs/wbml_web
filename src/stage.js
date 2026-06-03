@@ -181,10 +181,30 @@ export function buildStage(stageNum) {
   // R1: 첫 NPC(그라디우스 + 물약) 직후, 검 받기 전 길을 막는 장애물
   const gate = stageNum === 1 ? { x: 250, y: GROUND_Y - 90, w: 26, h: 90 } : null;
 
+  // RL 라운드(R3·R4·R9): 원작은 우→좌 진행. LR로 배치한 뒤 전체 x를 좌우 미러링한다.
+  // (플레이어 우측 스폰·카메라/성문 충돌 방향 처리는 game.js에서 dir로 분기.)
+  if (dir === 'RL') _mirrorStageX({ platforms, enemies, doors, pickups, castleGate, gate }, groundLen);
+
   return {
     platforms, enemies, doors, boss, bossChain, groundLen, gate, castleGate, pickups, bossDoor, dir,
     sky: round.sky, roundName: round.name, final: !!round.final,
   };
+}
+
+// 스테이지 전체를 수평으로 뒤집는다(좌→우 배치를 우→좌 진행으로). x' = len - x - w.
+function _mirrorStageX(d, len) {
+  const mx = (x, w) => len - x - (w || 0);
+  for (const p of d.platforms) if (!p.isGround) p.x = mx(p.x, p.w);  // 바닥은 전폭이라 불변
+  for (const dr of d.doors)    dr.x = mx(dr.x, dr.w);
+  for (const pk of d.pickups)  pk.x = mx(pk.x, pk.w);
+  if (d.castleGate) d.castleGate.x = mx(d.castleGate.x, d.castleGate.w);
+  if (d.gate)       d.gate.x       = mx(d.gate.x, d.gate.w);
+  for (const e of d.enemies) {
+    const nx = mx(e.x, e.w);
+    const pmin = mx(e.patrolMax, e.w), pmax = mx(e.patrolMin, e.w);  // 순찰 범위도 반전
+    e.x = nx; e.patrolMin = pmin; e.patrolMax = pmax;
+    e.facing = -e.facing; e.vx = -e.vx;
+  }
 }
 
 export function drawStage(ctx, stageData, camX, hasKey) {

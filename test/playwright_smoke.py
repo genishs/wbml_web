@@ -151,6 +151,24 @@ def run(page):
         check('↑ 누르면 숨은 문 드러남(revealed)', (not before) and after, f'{before}→{after}')
         page.screenshot(path=str(SHOTS / 'hidden_revealed.png'))
 
+    # 10) 진행방향 RL — R3는 우측 스폰 후 왼쪽으로 진행, 성문은 좌측
+    page.evaluate("() => window.__game._loadStage(3)")
+    time.sleep(0.15)
+    rl = page.evaluate("""() => {
+        const g = window.__game, s = g.stageData;
+        return { dir: s.dir, px: g.player.x, len: s.groundLen,
+                 gate: s.castleGate.x, cam: g.camX };
+    }""")
+    check('R3 = RL 방향', rl['dir'] == 'RL', rl['dir'])
+    check('RL: 플레이어 우측 스폰', rl['px'] > rl['len'] * 0.5, f"x={rl['px']:.0f}/{rl['len']}")
+    check('RL: 성문 좌측 배치', rl['gate'] < rl['len'] * 0.3, f"gate={rl['gate']:.0f}")
+    page.screenshot(path=str(SHOTS / 'rl_spawn.png'))
+    x0 = rl['px']
+    page.keyboard.down('ArrowLeft'); time.sleep(0.5); page.keyboard.up('ArrowLeft')
+    time.sleep(0.1)
+    x1 = page.evaluate("() => window.__game.player.x")
+    check('RL: 왼쪽 이동 반영(x 감소)', x1 < x0 - 2, f'{x0:.0f} → {x1:.0f}')
+
 def main():
     started = None
     if not server_up():
