@@ -6,6 +6,7 @@ import { Projectile, EnemyShot } from './projectile.js';
 import { Pickup } from './pickup.js';
 import { SWORD } from './equipment.js';
 import { Shop } from './shop.js';
+import { Facility } from './facility.js';
 import { drawHUD } from './ui.js';
 import { drawTitle, drawStory, STORY_PAGES } from './title.js';
 import { audio } from './audio.js';
@@ -16,8 +17,9 @@ export class Game {
   constructor(canvas, ctx) {
     this.canvas = canvas;
     this.ctx    = ctx ?? canvas.getContext('2d');
-    this.input  = new Input();
-    this.shop   = new Shop();
+    this.input    = new Input();
+    this.shop     = new Shop();
+    this.facility = new Facility();
     this.frame  = 0;
     this.storyPage = 0;
     this.projectiles = [];   // 활성 서브웨폰
@@ -60,6 +62,7 @@ export class Game {
     this.enemyShots  = [];
     this.pickups     = (this.stageData.pickups || []).slice();
     this.shop.close();
+    this.facility.close();
     // 라운드 시작 위치로 플레이어 복귀 (장비/점수/하트는 유지)
     const p = this.player;
     p.x = 160; p.y = GROUND_Y - 50; p.vx = 0; p.vy = 0;
@@ -82,6 +85,11 @@ export class Game {
     if (this.shop.open) {
       this.shop.update(this.input);
       if (!this.shop.open) this.nearDoor = null;
+      return;
+    }
+    if (this.facility.open) {              // 병원/바 이용 중에도 타이머 정지
+      this.facility.update(this.input);
+      if (!this.facility.open) this.nearDoor = null;
       return;
     }
 
@@ -157,9 +165,11 @@ export class Game {
       if (dist < DOOR_INTERACT_DIST) { this.nearDoor = d; break; }
     }
     if (this.nearDoor && input.wasPressed('ArrowUp')) {
-      if (this.nearDoor.type === 'quest')      this._questGift();
-      else if (this.nearDoor.type === 'boss')  this._enterBossArena();
-      else this.shop.openShop(this.nearDoor.type, player, this.stage);
+      const t = this.nearDoor.type;
+      if (t === 'quest')                      this._questGift();
+      else if (t === 'boss')                  this._enterBossArena();
+      else if (t === 'hospital' || t === 'bar') this.facility.openFacility(t, player, this.stage);
+      else this.shop.openShop(t, player, this.stage);
     }
 
     // 서브웨폰 발동 (아래 방향키)
@@ -467,7 +477,7 @@ export class Game {
 
     player.draw(ctx, worldCamX);
 
-    if (this.nearDoor && !this.shop.open && this.state === GAME_STATE.PLAYING) {
+    if (this.nearDoor && !this.shop.open && !this.facility.open && this.state === GAME_STATE.PLAYING) {
       const d  = this.nearDoor;
       const sx = d.x - camX + HUD_W + d.w / 2;
       ctx.fillStyle = '#ffff44';
@@ -479,9 +489,10 @@ export class Game {
 
     drawHUD(ctx, player, this.stage);
     this.shop.draw(ctx);
+    this.facility.draw(ctx);
 
     // 화면 하단 안내 메시지 (NPC 대사, 물약 사용 등)
-    if (this.noticeTimer > 0 && !this.shop.open) {
+    if (this.noticeTimer > 0 && !this.shop.open && !this.facility.open) {
       const w = VIEW_W - 40, nx = HUD_W + 20, ny = CANVAS_H - 56;
       ctx.fillStyle = 'rgba(0,0,0,0.80)'; ctx.fillRect(nx, ny, w, 34);
       ctx.strokeStyle = '#ffdd44'; ctx.lineWidth = 1; ctx.strokeRect(nx, ny, w, 34);

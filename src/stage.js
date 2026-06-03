@@ -1,25 +1,51 @@
 import { GROUND_Y, HUD_W, VIEW_W, COLORS } from './constants.js';
 import { Enemy, Boss, enemyAirborne } from './enemy.js';
 import { Pickup } from './pickup.js';
-import { SHOP_TYPE, SWORD } from './equipment.js';
+import { SWORD } from './equipment.js';
 
 export const MAX_ROUNDS = 11;
 
-// 아케이드 정식 보스 라인업(웹 자료 기준): 명칭·점수·HP·검 드롭 위치.
-// HP는 그라디우스(공격력1) 기준 타수 단위 — DEATH=4타. 검 드롭: 킹뱀파이어→브로드,
-// 자이언트콩→그레이트, 코인컬렉터→엑스칼리버, 데몬→레전드. (그라디우스는 1라운드 NPC가 지급)
+// 아케이드 11라운드 정본 — 1차 자료(사용자 제공 doc/원더보이보스정보.html) 기준.
+// HP는 그라디우스(공격력1) 기준 타수. 검 드롭: R2 킹뱀파이어→브로드, R5 자이언트콩→그레이트,
+// R7 코인컬렉터→엑스칼리버, R8 데몬→레전드. (그라디우스는 R1 NPC 지급)
+// ※ 자료는 R2/R5/R7/R8에 메인+서브 2단 보스 구조를 명시 — 현재는 대표(검드롭)보스로 압축. 2단 구현은 후속.
+// MEKA DRAGON hp2=192 = 2페이즈 데이터(2페이즈 전투는 후속 #8).
+// dir: 진행 방향(RL 라운드는 데이터에만 표기, 카메라 반전은 후속 단계). segments: 구역 시퀀스.
+//   town  = 문(상점/시설) 밀집 / field = 적·픽업·지형 / climb = 다층 플랫폼 / bossgate = 보스문
 const ROUNDS = [
-  { name: 'DEATH MASTER',   sky: '#0088ff', boss: 'fly',    hp: 4,   score: 2000,  sword: null,        enemies: ['snake','myconid','fangbat']      },
-  { name: 'KING VAMPIRE',   sky: '#223388', boss: 'fly',    hp: 6,   score: 2000,  sword: 'broad',     enemies: ['fangbat','myconid','python']     },
-  { name: 'RED KNIGHT',     sky: '#4455bb', boss: 'ground', hp: 20,  score: 3000,  sword: null,        enemies: ['orc','skeleton','fangbat']       },
-  { name: 'KRAKEN',         sky: '#0077cc', boss: 'fly',    hp: 24,  score: 3000,  sword: null,        enemies: ['jellyfish','crab','octopus']     },
-  { name: 'GIANT KONG',     sky: '#338800', boss: 'ground', hp: 64,  score: 3000,  sword: 'great',     enemies: ['orc','werebat','anaconda']       },
-  { name: 'SPHINX',         sky: '#aaaa77', boss: 'ground', hp: 84,  score: 3000,  sword: null,        enemies: ['anaconda','skeleton','wisp']     },
-  { name: 'COIN COLLECTOR', sky: '#aa0000', boss: 'fly',    hp: 32,  score: 4000,  sword: 'excalibur', enemies: ['wisp','wererat','ghost']         },
-  { name: 'DEMON',          sky: '#7a1f1f', boss: 'ground', hp: 96,  score: 3000,  sword: 'legend',    enemies: ['wisp','goblin','werebat']        },
-  { name: 'SNOW KONG',      sky: '#88ccee', boss: 'ground', hp: 96,  score: 4000,  sword: null,        enemies: ['yeti','ratmaster','snowyeti']    },
-  { name: 'SILVER KNIGHT',  sky: '#663322', boss: 'ground', hp: 96,  score: 5000,  sword: null,        enemies: ['undead','goblin','tarman']       },
-  { name: 'MECHA DRAGON',   sky: '#000066', boss: 'ground', hp: 256, score: 30000, sword: null,        enemies: ['undead','goblin','roper'], final: true },
+  { name: 'DEATH MASTER', sky: '#0088ff', boss: 'fly',    hp: 4,   score: 2000,  sword: null,        dir: 'LR',
+    enemies: ['snake','myconid','fangbat'],
+    segments: [ { type:'town', len:640, doors:['quest','shield','boots'] }, { type:'field', len:880, terrain:'grass', enemies:3, pickup:'buff' }, { type:'climb', len:400 }, { type:'bossgate', len:240 } ] },
+  { name: 'KING VAMPIRE', sky: '#1f6a3a', boss: 'fly',    hp: 6,  score: 2000,  sword: 'broad',     dir: 'LR',
+    enemies: ['myconid','snake','fangbat'],
+    segments: [ { type:'town', len:600, doors:['shield','boots','magic'] }, { type:'field', len:1000, terrain:'water', enemies:3, pickup:'heart' }, { type:'climb', len:460 }, { type:'field', len:560, terrain:'grass', enemies:2, pickup:'potion' }, { type:'bossgate', len:240 } ] },
+  { name: 'RED KNIGHT', sky: '#44506a', boss: 'ground', hp: 20,  score: 3000,  sword: null,        dir: 'RL',
+    enemies: ['orc','skeleton','fangbat'],
+    segments: [ { type:'field', len:760, terrain:'stone', enemies:3, pickup:'gold' }, { type:'town', len:520, doors:['shield','armor'] }, { type:'climb', len:480 }, { type:'field', len:640, terrain:'stone', enemies:2, pickup:'buff' }, { type:'bossgate', len:240 } ] },
+  { name: 'KRAKEN', sky: '#0077cc', boss: 'fly',    hp: 24,  score: 3000,  sword: null,        dir: 'RL',
+    enemies: ['jellyfish','crab','octopus'],
+    segments: [ { type:'field', len:820, terrain:'coast', enemies:3, pickup:'gold' }, { type:'town', len:520, doors:['boots','magic'] }, { type:'field', len:820, terrain:'water', enemies:2, pickup:'heart' }, { type:'bossgate', len:240 } ] },
+  { name: 'GIANT KONG', sky: '#338800', boss: 'ground', hp: 64,  score: 3000,  sword: 'great',     dir: 'LR',
+    enemies: ['orc','werebat','anaconda'],
+    segments: [ { type:'town', len:600, doors:['shield','armor','magic'] }, { type:'field', len:1120, terrain:'mountain', enemies:4, pickup:'buff' }, { type:'climb', len:540 }, { type:'bossgate', len:240 } ] },
+  { name: 'SPHINX', sky: '#aaaa77', boss: 'ground', hp: 84,  score: 3000,  sword: null,        dir: 'LR',
+    enemies: ['anaconda','skeleton','wisp'],
+    segments: [ { type:'town', len:580, doors:['shield','armor','magic'] }, { type:'field', len:1140, terrain:'desert', enemies:3, pickup:'potion' }, { type:'climb', len:480 }, { type:'bossgate', len:240 } ] },
+  { name: 'COIN COLLECTOR', sky: '#7a1f1f', boss: 'fly',    hp: 32,  score: 4000,  sword: 'excalibur', dir: 'LR',
+    enemies: ['wisp','wererat','ghost'],
+    segments: [ { type:'field', len:900, terrain:'lava', enemies:3, pickup:'gold' }, { type:'town', len:520, doors:['armor','magic'] }, { type:'field', len:820, terrain:'lava', enemies:3, pickup:'buff' }, { type:'bossgate', len:240 } ] },
+  { name: 'DEMON', sky: '#2a1f3a', boss: 'ground', hp: 96,  score: 3000,  sword: 'legend',    dir: 'LR',
+    enemies: ['wisp','goblin','werebat'],
+    segments: [ { type:'field', len:1000, terrain:'dungeon', enemies:3, pickup:'heart' }, { type:'town', len:520, doors:['armor','magic'] }, { type:'climb', len:540 }, { type:'bossgate', len:240 } ] },
+  { name: 'SNOW KONG', sky: '#88ccee', boss: 'ground', hp: 96,  score: 4000,  sword: null,        dir: 'RL',
+    enemies: ['snowyeti','yeti','ratmaster'],
+    segments: [ { type:'town', len:560, doors:['armor','magic'] }, { type:'field', len:1240, terrain:'ice', enemies:4, pickup:'buff' }, { type:'climb', len:560 }, { type:'bossgate', len:240 } ] },
+  { name: 'SILVER KNIGHT', sky: '#667088', boss: 'ground', hp: 96,  score: 5000,  sword: null,        dir: 'LR',
+    enemies: ['undead','goblin','skeleton'],
+    segments: [ { type:'field', len:1040, terrain:'castle', enemies:3, pickup:'potion' }, { type:'town', len:520, doors:['shield','armor'] }, { type:'climb', len:520 }, { type:'bossgate', len:240 } ] },
+  { name: 'MEKA DRAGON', sky: '#000066', boss: 'ground', hp: 256, hp2: 192, score: 30000, sword: null, dir: 'LR', final: true,
+    enemies: ['undead','goblin','roper'],
+    segments: [ { type:'field', len:1200, terrain:'castle', enemies:4, pickup:'gold' }, { type:'climb', len:600 }, { type:'field', len:940, terrain:'castle', enemies:3, pickup:'heart' }, { type:'bossgate', len:300 } ] },
 ];
 
 export function getRound(n) {
@@ -32,72 +58,87 @@ function makeDoor(id, x, type) {
 }
 
 export function buildStage(stageNum) {
-  const round     = getRound(stageNum);
-  const fieldLen  = 2600 + stageNum * 360;
-  const groundLen = fieldLen + 200;                     // 보스문 앞 여유 바닥
+  const round  = getRound(stageNum);
+  const dir    = round.dir || 'LR';
+  const segs   = round.segments;
+  const eTypes = round.enemies;
+  const buff   = ['gauntlet', 'helmet', 'wingboots'][(stageNum - 1) % 3];
+
+  const fieldLen  = segs.reduce((s, g) => s + g.len, 0);
+  const groundLen = fieldLen + 220;                     // 보스문 앞 여유 바닥
   const platforms = [{ x: 0, y: GROUND_Y, w: groundLen, h: 60, isGround: true }];
   const enemies   = [];
   const doors     = [];
+  const pickups   = [];
 
-  // 공중 플랫폼 (필드 구간에만 배치, 보스 방은 비움)
-  for (let x = 400; x < fieldLen - 300; x += 350) {
-    platforms.push({ x, y: GROUND_Y - (60 + (x % 3) * 12), w: 100, h: 16 });
+  // 세그먼트를 왼쪽부터 깔며 각 구역에 요소 배치 (마을→필드→다층→보스문)
+  let cursor = 0, ei = 0, bossDoor = null;
+  const townSpans = [];
+  for (const seg of segs) {
+    const x0 = cursor, x1 = cursor + seg.len, mid = (x0 + x1) / 2;
+
+    if (seg.type === 'town') {
+      townSpans.push({ x0, x1 });
+      const list = seg.doors || [];
+      list.forEach((t, i) => {
+        const dx = x0 + seg.len * (i + 1) / (list.length + 1) - 18;
+        doors.push(t === 'quest' ? makeDoor('quest', dx, 'quest') : makeDoor('shop-' + t, dx, t));
+      });
+    } else if (seg.type === 'field') {
+      const n = seg.enemies ?? 3;
+      for (let k = 0; k < n; k++) {
+        const t  = eTypes[ei++ % eTypes.length];
+        const ex = x0 + seg.len * (k + 0.5) / n;
+        const ey = enemyAirborne(t) ? GROUND_Y - 150 : GROUND_Y - 90;
+        enemies.push(new Enemy(t, ex, ey, { patrolMin: ex - 80, patrolMax: ex + 80 }));
+      }
+      for (let px = x0 + 140; px < x1 - 140; px += 320) {
+        platforms.push({ x: px, y: GROUND_Y - (70 + (px % 3) * 12), w: 100, h: 16, terrain: seg.terrain });
+      }
+      if (seg.pickup) {
+        const type = seg.pickup === 'buff' ? buff : seg.pickup;
+        const low  = seg.pickup === 'gold' || seg.pickup === 'potion';
+        const opt  = seg.pickup === 'gold' ? { amount: 50 } : undefined;
+        pickups.push(new Pickup(type, mid, GROUND_Y - (low ? 18 : 70), opt));
+      }
+    } else if (seg.type === 'climb') {
+      const steps = seg.steps ?? 4;
+      for (let k = 0; k < steps; k++) {
+        const px = x0 + seg.len * (k + 0.5) / steps - 50;
+        platforms.push({ x: px, y: GROUND_Y - 60 - k * 38, w: 92, h: 16 });
+      }
+      const t  = eTypes[ei++ % eTypes.length];
+      const ey = enemyAirborne(t) ? GROUND_Y - 150 : GROUND_Y - 90;
+      enemies.push(new Enemy(t, mid, ey, { patrolMin: mid - 60, patrolMax: mid + 60 }));
+    } else if (seg.type === 'bossgate') {
+      bossDoor = makeDoor('boss-door', mid - 24, 'boss');
+      bossDoor.y = GROUND_Y - 70; bossDoor.w = 48; bossDoor.h = 70;   // 보스문은 더 크고 위압적
+      doors.push(bossDoor);
+    }
+    cursor = x1;
   }
 
-  // 적: 라운드가 깊어질수록 증가, 보스 방 앞까지만 배치
-  const count = 5 + stageNum;
-  const types = round.enemies;
-  const span  = Math.max(400, fieldLen - 700);
-  for (let i = 0; i < count; i++) {
-    const t  = types[i % types.length];
-    const ex = 500 + i * (span / count);
-    const ey = enemyAirborne(t) ? GROUND_Y - 150 : GROUND_Y - 90;
-    enemies.push(new Enemy(t, ex, ey, { patrolMin: ex - 80, patrolMax: ex + 80 }));
+  // 시설 자동 배치: 병원은 비최종 라운드마다 1개(마지막 마을 끝), 바는 R1·R6(첫 마을 앞)
+  if (!round.final && townSpans.length) {
+    const t = townSpans[townSpans.length - 1];
+    doors.push(makeDoor('hospital', t.x1 - 70, 'hospital'));
+  }
+  if ((stageNum === 1 || stageNum === 6) && townSpans.length) {
+    const t = townSpans[0];
+    doors.push(makeDoor('bar', t.x0 + 40, 'bar'));
   }
 
-  // 1라운드: 첫 NPC(그라디우스 검 + 물약 지급) + 검 받기 전 길을 막는 장애물
-  let gate = null;
-  if (stageNum === 1) {
-    doors.push(makeDoor('quest', 110, 'quest'));
-    gate = { x: 250, y: GROUND_Y - 90, w: 26, h: 90 };
-  }
-
-  // 상점 문 (후반일수록 희소, 최종 라운드는 없음). 1라운드는 장애물 뒤로 배치.
-  if (!round.final) {
-    const base = stageNum === 1 ? 380 : 180;
-    doors.push(makeDoor('shop-weapon', base,       SHOP_TYPE.WEAPON));
-    doors.push(makeDoor('shop-shield', base + 140, SHOP_TYPE.SHIELD));
-    doors.push(makeDoor('shop-magic',  base + 280, SHOP_TYPE.MAGIC));
-    if (stageNum <= 6) doors.push(makeDoor('shop-armor', base + 420, SHOP_TYPE.ARMOR));
-    if (stageNum <= 4) doors.push(makeDoor('shop-boots', base + 560, SHOP_TYPE.BOOTS));
-  }
-
-  // 필드 수집물: 시간제 강화아이템(라운드마다 순환) + 하트/물약/돈주머니를 곳곳에 숨김
-  const pickups = [];
-  const buffCycle = ['gauntlet', 'helmet', 'wingboots'];
-  const fieldStart = stageNum === 1 ? 520 : 320;   // 1라운드는 장애물/NPC 뒤부터
-  const fieldEnd   = fieldLen - 200;
-  const at = (frac) => fieldStart + (fieldEnd - fieldStart) * frac;
-  pickups.push(new Pickup(buffCycle[(stageNum - 1) % 3], at(0.30), GROUND_Y - 70));
-  pickups.push(new Pickup('heart',  at(0.62), GROUND_Y - 70));
-  pickups.push(new Pickup('potion', at(0.80), GROUND_Y - 18));
-  pickups.push(new Pickup('gold',   at(0.45), GROUND_Y - 18, { amount: 50 }));
-
-  // 보스문: 필드 끝. 다른 상점처럼 문을 열고 들어가면 보스방(아레나)으로 전환
-  const bossDoor = makeDoor('boss-door', fieldLen + 60, 'boss');
-  bossDoor.y = GROUND_Y - 70; bossDoor.w = 48; bossDoor.h = 70;   // 보스문은 더 크고 위압적
-  doors.push(bossDoor);
+  // R1: 첫 NPC(그라디우스 + 물약) 직후, 검 받기 전 길을 막는 장애물
+  const gate = stageNum === 1 ? { x: 250, y: GROUND_Y - 90, w: 26, h: 90 } : null;
 
   // 보스 객체(스탯). 위치/순찰은 아레나 입장 시 설정됨
   const boss = new Boss(round.boss, fieldLen, GROUND_Y - 48, {
-    name: round.name,
-    hp:   round.hp,
-    score: round.score,
+    name: round.name, hp: round.hp, score: round.score,
     swordReward: round.sword ? SWORD[round.sword] : null,
   });
 
   return {
-    platforms, enemies, doors, boss, groundLen, gate, pickups, bossDoor,
+    platforms, enemies, doors, boss, groundLen, gate, pickups, bossDoor, dir,
     sky: round.sky, roundName: round.name, final: !!round.final,
   };
 }
@@ -235,7 +276,7 @@ function _drawDoors(ctx, doors, camX) {
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 8px monospace';
     ctx.textAlign = 'center';
-    const label = { weapon: 'WPN', shield: 'SHD', armor: 'ARM', boots: 'BTS', magic: 'MAG', quest: 'NPC' }[d.type] ?? '?';
+    const label = { weapon: 'WPN', shield: 'SHD', armor: 'ARM', boots: 'BTS', magic: 'MAG', quest: 'NPC', hospital: 'HOSP', bar: 'BAR' }[d.type] ?? '?';
     ctx.fillText(label, sx + d.w / 2, d.y - 4);
     ctx.textAlign = 'left';
   }

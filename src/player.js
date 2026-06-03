@@ -59,6 +59,7 @@ export class Player {
     this.inventory = { helmet: 0, gauntlet: 0, wingboots: 0, key: 0, potion: 0, story: null };
     // 시간제 강화 잔여 프레임. 활성 동안 inventory 플래그=1로 HUD에 표시
     this.buffs = { helmet: 0, gauntlet: 0, wingboots: 0 };
+    this.hospitalVisits = 0;   // 병원 누진 비용용(이용할수록 상승)
   }
 
   // 강화아이템 획득 → 버프 발동(지속시간 리필) + 소지품 슬롯 점등

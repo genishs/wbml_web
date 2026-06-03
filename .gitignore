@@ -7,3 +7,8 @@ doc/ignore/
 original/
 .claude/
 _t*.mjs
+
+# 외부에서 저장한 참고용 웹페이지(제3자 저작물) — 로컬 참고만, 커밋 제외
+doc/원더보이보스정보*
+doc/보스정보*
+doc/*.files/
