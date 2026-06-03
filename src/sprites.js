@@ -1,427 +1,298 @@
-// Pixel art sprites recreated in Wonder Boy in Monster Land style
-// Based on the original arcade / Sega Master System art (1987, Sega)
+// Wonder Boy in Monster Land â€” Procedural Sprite Renderer
+// ëª¨ë“  ìºë¦­í„°ë¥¼ ìº”ë²„ìŠ¤ì— ì§ì ‘ ê·¸ë¦°ë‹¤(ì™¸ë¶€ PNG ì˜ì¡´ ì œê±°).
+// ê²€/ë°©íŒ¨/ê°‘ì˜·ì€ equipment.jsì˜ ìƒ‰ ë°ì´í„°ë¡œ ë“±ê¸‰ë³„ ì™¸í˜•ì´ ë‹¬ë¼ì§„ë‹¤.
 
-// Palette: index ??CSS color (null = transparent)
-// Accessed via parseInt(char, 36): '0'-'9' = 0-9, 'a'-'z' = 10-35
-const P = [
-  null,        // 0  transparent
-  '#F8B068',   // 1  skin
-  '#5C2810',   // 2  dark brown (helmet)
-  '#F0A010',   // 3  yellow tunic
-  '#401808',   // 4  dark brown boots/belt
-  '#8C4820',   // 5  mid brown (helmet shading)
-  '#101010',   // 6  near-black (eyes/outline)
-  '#D0D0C0',   // 7  silver (sword)
-  '#C81818',   // 8  red (scarf / goblin torso)
-  '#FFD030',   // 9  gold (belt buckle)
-  '#30A830',   // a  green (slime)
-  '#60D060',   // b  light green (slime highlight)
-  '#0C400C',   // c  dark green (unused / shadow)
-  '#E06018',   // d  orange (goblin skin)
-  '#983008',   // e  dark orange (goblin shadow)
-  '#3858A8',   // f  blue (knight armor)
-  '#202868',   // g  dark blue (knight shadow)
-  '#7898E0',   // h  light blue (knight highlight)
-  '#B02020',   // i  dragon red
-  '#701010',   // j  dragon dark red
-  '#FF8000',   // k  bright orange (fire)
-];
+// â”€â”€ í”½ì…€ ë§¤íŠ¸ë¦­ìŠ¤ ë Œë” í—¬í¼ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function pad16(s) { return (s + '................').slice(0, 16); }
 
-function make(rows) {
-  const h = rows.length, w = rows[0].length;
-  const cv = document.createElement('canvas');
-  cv.width = w; cv.height = h;
-  const cx = cv.getContext('2d');
-  rows.forEach((row, y) => {
+function drawMatrix(ctx, rows, pal, sc) {
+  for (let y = 0; y < rows.length; y++) {
+    const row = rows[y];
     for (let x = 0; x < row.length; x++) {
-      const color = P[parseInt(row[x], 36)];
-      if (color) { cx.fillStyle = color; cx.fillRect(x, y, 1, 1); }
+      const col = pal[row[x]];
+      if (col) { ctx.fillStyle = col; ctx.fillRect(x * sc, y * sc, sc, sc); }
     }
-  });
-  return cv;
+  }
 }
 
-// ?€?€ PLAYER (16 Ã— 24) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
-// Facing right by default; flip horizontally when facing left.
-
-const PLAYER_W1 = make([   // walk / stand frame 1
-  '0000222200000000',
-  '0002522520000000',
-  '0002555520000000',
-  '0001111100000000',
-  '0001611600000000',
-  '0001111100000000',
-  '0088888880000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0049494940000000',
-  '0033443300000000',
-  '0033443300000000',
-  '0034400440000000',
-  '0044400440000000',
-  '0044400440000000',
-  '0044500450000000',
-  '0044400440000000',
-  '0044400440000000',
-  '0044000440000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-const PLAYER_W2 = make([   // walk frame 2 (legs alternated)
-  '0000222200000000',
-  '0002522520000000',
-  '0002555520000000',
-  '0001111100000000',
-  '0001611600000000',
-  '0001111100000000',
-  '0088888880000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0049494940000000',
-  '0033443300000000',
-  '0033443300000000',
-  '0004403440000000',
-  '0004403440000000',
-  '0004403440000000',
-  '0005403450000000',
-  '0004403440000000',
-  '0004403440000000',
-  '0004400440000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-const PLAYER_ATK = make([  // attack (sword extended right)
-  '0000222200000000',
-  '0002522520000000',
-  '0002555520000000',
-  '0001111100000000',
-  '0001611600000000',
-  '0001111100000000',
-  '0088888880000000',
-  '0033333337777770',
-  '0033333337000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0033333330000000',
-  '0049494940000000',
-  '0033443300000000',
-  '0033443300000000',
-  '0034400440000000',
-  '0044400440000000',
-  '0044400440000000',
-  '0044500450000000',
-  '0044400440000000',
-  '0044400440000000',
-  '0044000440000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-// ?€?€ SLIME (16 Ã— 12) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
-
-const SLIME_1 = make([   // normal
-  '0000aaaa00000000',
-  '000aaaaaaa000000',
-  '00aaabbaabaa0000',
-  '0aaab6aab6aaa000',
-  '0aaababababaa000',
-  '0aaaaaaaaabaa000',
-  '0aaaaaaaaaa00000',
-  '00aaaaaaaaa00000',
-  '000aaaaaaa000000',
-  '0000aaaaaa000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-const SLIME_2 = make([   // squished (bounce)
-  '0000000000000000',
-  '0000000000000000',
-  '00aaaaaaaaaaaa00',
-  '0aaab6aaab6aaaa0',
-  '0aaababababaaa00',
-  '0aaaaaaaaaaaaa00',
-  '00aaaaaaaaaa0000',
-  '0000aaaaaa000000',
-  '0000000000000000',
-  '0000000000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-// ?€?€ GOBLIN (16 Ã— 20) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
-
-const GOBLIN_1 = make([  // stand
-  '00000ddddd000000',
-  '0000dde66edd0000',
-  '0000dddddddd0000',
-  '0000dddedeed0000',
-  '0000edddddde0000',
-  '0000e8888ee00000',
-  '0000888888000000',
-  '0000888888000000',
-  '0000888888000000',
-  '0004944494000000',
-  '0004488884000000',
-  '0004488884000000',
-  '0000480048000000',
-  '0000480048000000',
-  '0000440044000000',
-  '0000440044000000',
-  '0000440044000000',
-  '0000000000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-const GOBLIN_2 = make([  // walk (arm raised)
-  '00000ddddd000000',
-  '0000dde66edd0000',
-  '0000dddddddd0000',
-  '0000dddedeed0000',
-  '0000edddddde0000',
-  '0000e8888ee00000',
-  '0888888888000000',
-  '0088888888000000',
-  '0000888888000000',
-  '0004944494000000',
-  '0004488884000000',
-  '0004488884000000',
-  '0000048048000000',
-  '0000048048000000',
-  '0000044044000000',
-  '0000044044000000',
-  '0000044044000000',
-  '0000000000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-// ?€?€ KNIGHT (16 Ã— 24) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
-
-const KNIGHT_1 = make([  // stand
-  '0000ffffff000000',
-  '000ffffffhf00000',
-  '000fgggggff00000',
-  '000fg6g6gff00000',
-  '000fffffffh00000',
-  '0000f777ff000000',
-  '00fffffffff00000',
-  '00fhffhffff00000',
-  '00fffffffff00000',
-  '00fffffffff00000',
-  '0007ffffff700000',
-  '000ffgffgff00000',
-  '000ffgffgff00000',
-  '000ffgffgff00000',
-  '000fg0ff0gf00000',
-  '0000g0ff0g000000',
-  '0000g0ff0g000000',
-  '0000g0ff0g000000',
-  '0000ggffgg000000',
-  '0000ggffgg000000',
-  '0000ggffgg000000',
-  '000ggggggg000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-const KNIGHT_2 = make([  // walk (arm raised)
-  '0000ffffff000000',
-  '000ffffffhf00000',
-  '000fgggggff00000',
-  '000fg6g6gff00000',
-  '000fffffffh00000',
-  '0000f777ff000000',
-  '0ffffffffffh0000',
-  '0ffhffhfffff0000',
-  '00fffffffff00000',
-  '00fffffffff00000',
-  '0007ffffff700000',
-  '000ffgffgff00000',
-  '000ffgffgff00000',
-  '000ffgffgff00000',
-  '0000fg0gff000000',
-  '0000fg0gff000000',
-  '0000fg0gff000000',
-  '0000fg0gff000000',
-  '0000ffgff0000000',
-  '0000ffgff0000000',
-  '0000ffgff0000000',
-  '0000ggggg0000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
-
-// ?€?€ DRAGON (48 Ã— 40, boss) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
-// Drawn programmatically; faces LEFT by default.
-
-function makeDragon(frame) {
-  const cv = document.createElement('canvas');
-  cv.width = 48; cv.height = 40;
-  const ctx = cv.getContext('2d');
-
-  // Body
-  ctx.fillStyle = '#B02020';
-  ctx.fillRect(12, 12, 32, 18);
-
-  // Belly (lighter)
-  ctx.fillStyle = '#D04040';
-  ctx.fillRect(14, 18, 28, 12);
-
-  // Head (left side, faces left)
-  ctx.fillStyle = '#C03030';
-  ctx.fillRect(2, 6, 16, 16);
-
-  // Upper jaw / snout
-  ctx.fillStyle = '#B02020';
-  ctx.fillRect(0, 6, 6, 8);
-
-  // Lower jaw (open mouth area)
-  ctx.fillStyle = '#801010';
-  ctx.fillRect(0, 14, 8, 6);
-
-  // Teeth
-  ctx.fillStyle = '#F0F0E0';
-  ctx.fillRect(1, 13, 2, 3);
-  ctx.fillRect(4, 13, 2, 3);
-
-  // Eye
-  ctx.fillStyle = '#FFD030';
-  ctx.fillRect(6, 8, 5, 5);
-  ctx.fillStyle = '#101010';
-  ctx.fillRect(7, 9, 3, 3);
-
-  // Dorsal spikes
-  ctx.fillStyle = '#901010';
-  const spikeY = frame === 1 ? 1 : 0;
-  for (let i = 0; i < 4; i++) {
-    const sx = 16 + i * 8;
-    ctx.fillRect(sx + 1, spikeY, 2, 10);
-    ctx.fillRect(sx,     spikeY + 4, 4, 6);
-  }
-
-  // Tail (right side)
-  ctx.fillStyle = '#901818';
-  ctx.fillRect(40, 20, 8, 8);
-  ctx.fillStyle = '#701010';
-  ctx.fillRect(44, 26, 4, 6);
-  ctx.fillRect(46, 30, 2, 4);
-
-  // Legs
-  const legOff = frame === 0 ? 0 : 2;
-  ctx.fillStyle = '#901818';
-  ctx.fillRect(16, 30 - legOff, 8, 10);
-  ctx.fillRect(28, 30 + legOff, 8, Math.max(6, 10 - legOff));
-
-  // Claws
-  ctx.fillStyle = '#E8D000';
-  ctx.fillRect(15, 38, 3, 2);
-  ctx.fillRect(19, 38, 3, 2);
-  ctx.fillRect(27, 36 + legOff, 3, 2);
-  ctx.fillRect(31, 36 + legOff, 3, 2);
-
-  // Fire breath (frame 1)
-  if (frame === 1) {
-    ctx.fillStyle = '#FF8000';
-    ctx.fillRect(0, 15, 8, 5);
-    ctx.fillStyle = '#FFD030';
-    ctx.fillRect(0, 16, 5, 3);
-  }
-
-  return cv;
+function fr(ctx, x, y, w, h) {
+  ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
 }
 
-// ?€?€ Export ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// â”€â”€ ížˆì–´ë¡œ(ì›ë”ë³´ì´) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// 16Ã—24 ê·¸ë¦¬ë“œ, ìŠ¤ì¼€ì¼ 3 â†’ ì‹œê° 48Ã—72. ì¶©ëŒë°•ìŠ¤(28) ê¸°ì¤€ ê°€ìš´ë° ì •ë ¬.
+const HERO_UPPER = [
+  '',
+  '....cccc',
+  '...cccccc',
+  '..cccccccc',
+  '..cksssskc',
+  '...sssse',
+  '...ssssss',
+  '...sdssss',
+  '....ssss',
+  '....httt',
+  '...tttttt',
+  '..tttttttt',
+  '..tutttttt',
+  '...tttttt',
+  '...pppp',
+  '...pppp',
+].map(pad16);
 
+const HERO_LEGS = {
+  idle:  ['...pp.pp', '...pp.pp', '...ss.ss', '...ss.ss', '...ss.ss', '..bbb.bbb', '..bbb.bbb', ''],
+  walk1: ['...pp.pp', '...pp.pp', '..sss.ss', '..ss..ss', '..ss...s', '.bbb..bb', '.bbb...b', ''],
+  walk2: ['...pp.pp', '...pp.pp', '...ss.sss', '...ss..ss', '..s...sss', '..bb..bbb', '..b...bbb', ''],
+  jump:  ['...pp.pp', '...pppppp', '...ss.ss', '...ss.ss', '..bbb.bbb', '..bbb.bbb', '', ''],
+}; // eslint-disable-line
+for (const k of Object.keys(HERO_LEGS)) HERO_LEGS[k] = HERO_LEGS[k].map(pad16);
 
-const SWORD = make([
-  '0000000000000000',
-  '0000000000000000',
-  '0000777770000000',
-  '0062777777700000',
-  '0000777770000000',
-  '0000000000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
+// ìƒ‰ì€ ì›ìž‘ ROM ìƒ‰ìƒ PROMì—ì„œ ì¶”ì¶œí•œ ì •í’ˆ íŒ”ë ˆíŠ¸(doc/arcade-palette.json) ìƒ‰êµ°ìœ¼ë¡œ ë§¤í•‘
+function heroPalette(eq) {
+  const armor = eq?.armor;
+  const boots = eq?.boots;
+  return {
+    '.': null,
+    c: armor?.helmetColor || '#00cc00',          // ì´ˆë¡ ëª¨ìž
+    k: '#008800',
+    s: '#ffccbb', d: '#cc9988', e: '#000000', h: '#774433', // í”¼ë¶€/ëª…ì•”/ëˆˆ/ë¨¸ë¦¬
+    t: armor?.bodyColor || '#0077cc',            // íŠœë‹‰(íŒŒëž‘)
+    u: armor?.trimColor || '#004499',
+    p: '#ee0000', q: '#aa0000',                  // ë¹¨ê°• ë°˜ë°”ì§€
+    b: (boots && boots.id !== 'none' && boots.color) || '#663322',
+  };
+}
 
-const SWORD_BROAD = make([
-  '0000000000000000',
-  '0000007777700000',
-  '0000077777770000',
-  '0067777777777000',
-  '0000077777770000',
-  '0000007777700000',
-  '0000000000000000',
-  '0000000000000000',
-]);
+function legsFor(state, animFrame) {
+  if (state === 'walk')      return animFrame === 1 ? HERO_LEGS.walk2 : HERO_LEGS.walk1;
+  if (state === 'jump' || state === 'knockback') return HERO_LEGS.jump;
+  return HERO_LEGS.idle;
+}
 
-const SWORD_GRADIUS = make([
-  '0000000000000000',
-  '0000220000000000',
-  '0000277777700000',
-  '0022277777777000',
-  '0000277777700000',
-  '0000220000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
+export function drawWonderBoy(ctx, { facing, state, animFrame, eq, attackPhase = 0 }) {
+  const SC = 3;
+  const GW = 16;
+  const ox = (28 - GW * SC) / 2; // -10, ì¶©ëŒë°•ìŠ¤ ê°€ìš´ë° ì •ë ¬
 
-const SWORD_GREAT = make([
-  '0000000000000000',
-  '0006600000000000',
-  '0000677777770000',
-  '0066677777777700',
-  '0000677777770000',
-  '0006600000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(ox, 0);
+  if (facing === -1) { ctx.translate(GW * SC, 0); ctx.scale(-1, 1); }
 
-const SWORD_EXCALIBUR = make([
-  '0000000000000000',
-  '0009900000000000',
-  '0000977777777000',
-  '00h9f77777777770',
-  '0000977777777000',
-  '0009900000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
+  const pal = heroPalette(eq);
+  drawMatrix(ctx, HERO_UPPER, pal, SC);          // ìƒì²´(0~15í–‰)
+  drawLegs(ctx, state, animFrame, pal, SC);      // ë‹¤ë¦¬(16~23í–‰)
+  drawShield(ctx, eq?.shield);                   // ë°©íŒ¨: ì•žì†(ì§„í–‰ë°©í–¥)
+  drawSword(ctx, eq?.sword, state, attackPhase, pal); // ê²€: ë’·ì† â†’ ì•žìœ¼ë¡œ ì°Œë¥´ê¸°(ë§¨ ìœ„)
+  ctx.restore();
+}
 
-const SWORD_LEGEND = make([
-  '0000000000000000',
-  '0008800000000000',
-  '00008k9999999000',
-  '00989k9999999990',
-  '00008k9999999000',
-  '0008800000000000',
-  '0000000000000000',
-  '0000000000000000',
-]);
+function drawLegs(ctx, state, animFrame, pal, sc) {
+  const rows = legsFor(state, animFrame);
+  for (let y = 0; y < rows.length; y++) {
+    const row = rows[y];
+    for (let x = 0; x < row.length; x++) {
+      const col = pal[row[x]];
+      if (col) { ctx.fillStyle = col; ctx.fillRect(x * sc, (y + 16) * sc, sc, sc); }
+    }
+  }
+}
 
-export const sprites = {
-  weapons: {
-    sword: SWORD,
-    swordBroad: SWORD_BROAD,
-    swordGradius: SWORD_GRADIUS,
-    swordGreat: SWORD_GREAT,
-    swordExcalibur: SWORD_EXCALIBUR,
-    swordLegend: SWORD_LEGEND,
+// ì§„ì§œ 'ê²€' ëª¨ì–‘: ì†ìž¡ì´ + í¬ë¡œìŠ¤ê°€ë“œ + ë‚ (í•˜ì´ë¼ì´íŠ¸) + ë¾°ì¡±í•œ ë.
+// í‰ìƒì‹œì—” ë’·ì†ì— ì„¸ì›Œ ë“¤ê³ , ê³µê²© ì‹œ í¬ê²Œ ì°Œë¥¸ë‹¤: ìœˆë“œì—…(ë’¤ë¡œ ë‹¹ê¹€)â†’ë‚´ì§€ë¦„â†’ìµœëŒ€â†’íšŒìˆ˜.
+function drawSword(ctx, sword, state, phase, pal) {
+  if (!sword || sword.id === 'none') return;
+  const blade    = sword.bladeColor || '#d8d8e8';
+  const guard    = sword.guardColor || '#c0a020';
+  const reach    = sword.reach || 14;
+  const reachVis = 18 + reach;
+  const skin     = (pal && pal.s) || '#ffccbb';
+  const skinD    = (pal && pal.d) || '#cc9988';
+
+  if (state === 'attack') {
+    const y = 41;
+
+    if (phase === 0) {
+      // ìœˆë“œì—…: ê²€ì„ ì–´ê¹¨ ë’¤ë¡œ ì„¸ì›Œ ëŒì–´ë‹¹ê¹€(íƒ€ê²© ì§ì „ì˜ 'ì¤€ë¹„' ë™ìž‘ â†’ ë¬´ê²Œê°)
+      const gx = 3;
+      ctx.fillStyle = skin;  fr(ctx, gx + 1, y, 6, 3);                    // ë‹¹ê¸´ ì•žì†
+      ctx.fillStyle = guard; fr(ctx, gx, y - 3, 3, 9);                    // í¬ë¡œìŠ¤ê°€ë“œ
+      ctx.fillStyle = blade; fr(ctx, gx - 1, y - 13, 3, 11);             // ì„¸ìš´ ë‚ 
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; fr(ctx, gx - 1, y - 13, 1, 11);
+      return;
+    }
+
+    // ë‚´ì§€ë¦„/ìµœëŒ€/íšŒìˆ˜: ìˆ˜í‰ ì „ë°©. ëª¸â†’ì†ìž¡ì´ë¡œ ë»—ì€ ì•žíŒ”ê¹Œì§€ ê·¸ë ¤ 'ë‹¿ëŠ”' ë¬´ê²Œê°.
+    let gripX, len, th;
+    switch (phase) {
+      case 1:  gripX = 23; len = reachVis * 0.72; th = 6; break;          // ë‚´ì§€ë¦„
+      case 2:  gripX = 32; len = reachVis * 1.18; th = 8; break;          // ìµœëŒ€(í¬ê³  êµµê²Œ)
+      default: gripX = 25; len = reachVis * 0.58; th = 6; break;          // íšŒìˆ˜
+    }
+    // ë»—ì€ ì•žíŒ”(ì–´ê¹¨ ~ ì†ìž¡ì´)
+    ctx.fillStyle = skinD; fr(ctx, 22, y + 1, gripX - 20, 4);
+    ctx.fillStyle = skin;  fr(ctx, 22, y, gripX - 20, 3);
+    _bladeH(ctx, gripX, y, len, blade, guard, th);
+
+    if (phase === 2) {
+      // ìµœëŒ€ ì°Œë¥´ê¸° ìž„íŒ©íŠ¸: ì¹¼ë ì„¬ê´‘ + í©ë‚ ë¦¬ëŠ” ìŠ¤íŒŒí¬(íƒ€ê²©ê°)
+      const tipX = gripX + 4 + len;
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      fr(ctx, tipX, y - 3, 2, th + 6);
+      ctx.fillStyle = 'rgba(255,240,170,0.8)';
+      fr(ctx, tipX + 3, y - 5, 2, 2); fr(ctx, tipX + 5, y + 1, 2, 2);
+      fr(ctx, tipX + 3, y + th + 1, 2, 2); fr(ctx, tipX + 7, y + 3, 2, 2);
+    }
+  } else {
+    // í‰ìƒì‹œ â€” ë’·ì†(ì¢Œì¸¡)ì— ì„¸ì›Œ ë“¦
+    const x = 7, yBot = 34, len = 14 + reach * 0.6;
+    ctx.fillStyle = '#6a3410'; fr(ctx, x, yBot, 3, 7);                 // ì†ìž¡ì´
+    ctx.fillStyle = '#3a1c08'; fr(ctx, x, yBot + 7, 3, 2);            // í¼ë©œ
+    ctx.fillStyle = guard;     fr(ctx, x - 3, yBot - 2, 9, 3);        // í¬ë¡œìŠ¤ê°€ë“œ
+    ctx.fillStyle = blade;     fr(ctx, x, yBot - len, 3, len);         // ë‚ (ìœ„ë¡œ)
+    ctx.fillStyle = 'rgba(255,255,255,0.75)'; fr(ctx, x, yBot - len, 1, len);
+    ctx.fillStyle = blade;                                            // ì¹¼ë
+    ctx.beginPath();
+    ctx.moveTo(x, yBot - len); ctx.lineTo(x + 1.5, yBot - len - 6);
+    ctx.lineTo(x + 3, yBot - len); ctx.closePath(); ctx.fill();
+  }
+}
+
+// ìˆ˜í‰ ì „ë°© ì°Œë¥´ê¸°ìš© ì¹¼ë‚  ë Œë” (th = ê²€ ë‘ê»˜; ìµœëŒ€ ì°Œë¥´ê¸°ì—ì„œ ë” êµµê²Œ)
+function _bladeH(ctx, gripX, y, len, blade, guard, th = 6) {
+  const bt = th - 2;                                                 // ë‚  ë‘ê»˜
+  ctx.fillStyle = '#6a3410'; fr(ctx, gripX - 7, y, 9, bt);           // ì†ìž¡ì´
+  ctx.fillStyle = '#3a1c08'; fr(ctx, gripX - 8, y, 3, bt);           // í¼ë©œ
+  ctx.fillStyle = guard;     fr(ctx, gripX + 1, y - 4, 3, th + 6);   // í¬ë¡œìŠ¤ê°€ë“œ
+  ctx.fillStyle = blade;     fr(ctx, gripX + 4, y, len, bt);         // ë‚ 
+  ctx.fillStyle = 'rgba(255,255,255,0.75)'; fr(ctx, gripX + 4, y, len, 1);
+  ctx.fillStyle = blade;                                            // ì¹¼ë(ì‚¼ê°)
+  ctx.beginPath();
+  ctx.moveTo(gripX + 4 + len, y); ctx.lineTo(gripX + 4 + len + 7, y + bt / 2);
+  ctx.lineTo(gripX + 4 + len, y + bt); ctx.closePath(); ctx.fill();
+}
+
+function drawShield(ctx, shield) {
+  if (!shield || shield.id === 'none') return;
+  const body = shield.bodyColor || '#8090a0';
+  const rim  = shield.rimColor  || '#404858';
+  const x = 32, y = 28, w = 11, h = 20;  // ì•žì†(ìš°ì¸¡, ì§„í–‰ë°©í–¥)
+  ctx.fillStyle = rim;  fr(ctx, x - 1, y - 1, w + 2, h + 2);
+  ctx.fillStyle = body; fr(ctx, x, y, w, h);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)'; fr(ctx, x + 2, y + 2, 2, h - 6);
+  ctx.fillStyle = rim;  fr(ctx, x + w / 2 - 1, y + 3, 2, h - 8); // ë³´ìŠ¤(ì¤‘ì•™ ëŒê¸°)
+}
+
+// â”€â”€ ì  ìŠ¤í”„ë¼ì´íŠ¸ (familyë³„ ì ˆì°¨ì , color/darkë¡œ ë³€ì¢… ìƒ‰ êµ¬ë¶„) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ctxëŠ” ì  ížˆíŠ¸ë°•ìŠ¤ ì¢Œìƒë‹¨(0,0)ìœ¼ë¡œ ì´ë¯¸ translate ëœ ìƒíƒœ.
+export function drawEnemySprite(ctx, { family, color, dark, facing, w, h, tick }) {
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  if (facing === -1) { ctx.translate(w, 0); ctx.scale(-1, 1); }
+
+  const fn = ENEMY_FAMILY[family];
+  let drawn = true;
+  if (fn) fn(ctx, w, h, color, dark, tick || 0); else drawn = false;
+
+  ctx.restore();
+  return drawn;
+}
+
+function eyes(ctx, ex, ey, gap = 0) {
+  ctx.fillStyle = '#ffffff'; fr(ctx, ex, ey, 3, 3); fr(ctx, ex + gap, ey, 3, 3);
+  ctx.fillStyle = '#000000'; fr(ctx, ex + 1, ey + 1, 2, 2); fr(ctx, ex + gap + 1, ey + 1, 2, 2);
+}
+
+const ENEMY_FAMILY = {
+  snake(ctx, w, h, c, d) {
+    ctx.fillStyle = c; fr(ctx, 0, h * 0.45, w * 0.78, h * 0.55);          // ëª¸í†µ
+    fr(ctx, w * 0.56, h * 0.05, w * 0.34, h * 0.62);                      // ì„¸ìš´ ë¨¸ë¦¬
+    ctx.fillStyle = d; fr(ctx, 0, h * 0.8, w * 0.78, h * 0.2);
+    eyes(ctx, w * 0.74, h * 0.2, 0); ctx.fillStyle = '#ee0000'; fr(ctx, w * 0.9, h * 0.4, 6, 2);
   },
-  player: [PLAYER_W1, PLAYER_W2, PLAYER_ATK],
-  slime:  [SLIME_1,  SLIME_2],
-  goblin: [GOBLIN_1, GOBLIN_2],
-  knight: [KNIGHT_1, KNIGHT_2],
-  dragon: [makeDragon(0), makeDragon(1)],
+  mushroom(ctx, w, h, c, d) {
+    ctx.fillStyle = d; fr(ctx, w * 0.34, h * 0.45, w * 0.32, h * 0.55);   // ì¤„ê¸°(ì‚´ìƒ‰ d)
+    ctx.fillStyle = c; fr(ctx, w * 0.08, h * 0.2, w * 0.84, h * 0.3);     // ê°“
+    fr(ctx, w * 0.2, h * 0.1, w * 0.6, h * 0.16);
+    ctx.fillStyle = '#ffffff'; fr(ctx, w * 0.28, h * 0.26, 5, 5); fr(ctx, w * 0.6, h * 0.3, 4, 4);
+    eyes(ctx, w * 0.4, h * 0.58, w * 0.16);
+  },
+  humanoid(ctx, w, h, c, d) {
+    ctx.fillStyle = d; fr(ctx, w * 0.3, h * 0.72, w * 0.14, h * 0.28); fr(ctx, w * 0.56, h * 0.72, w * 0.14, h * 0.28); // ë‹¤ë¦¬
+    ctx.fillStyle = c; fr(ctx, w * 0.26, h * 0.34, w * 0.48, h * 0.4);   // ëª¸í†µ
+    ctx.fillStyle = d; fr(ctx, w * 0.32, h * 0.1, w * 0.36, h * 0.26);   // ë¨¸ë¦¬
+    eyes(ctx, w * 0.4, h * 0.18, w * 0.16);
+    ctx.fillStyle = '#cccccc'; fr(ctx, w * 0.74, h * 0.2, 3, h * 0.4);   // ë¬´ê¸°
+    ctx.fillStyle = '#774433'; fr(ctx, w * 0.16, h * 0.4, w * 0.12, 4);  // í™œ/ê³¤ë´‰ ì†
+  },
+  bat(ctx, w, h, c, d) {
+    ctx.fillStyle = c;
+    fr(ctx, 0, h * 0.18, w * 0.36, h * 0.5); fr(ctx, w * 0.64, h * 0.18, w * 0.36, h * 0.5); // ë‚ ê°œ
+    fr(ctx, w * 0.06, h * 0.12, w * 0.16, h * 0.16); fr(ctx, w * 0.78, h * 0.12, w * 0.16, h * 0.16);
+    ctx.fillStyle = d; fr(ctx, w * 0.36, h * 0.22, w * 0.28, h * 0.52);  // ëª¸í†µ
+    fr(ctx, w * 0.4, h * 0.06, 3, 6); fr(ctx, w * 0.56, h * 0.06, 3, 6); // ê·€
+    ctx.fillStyle = '#ffcc00'; fr(ctx, w * 0.42, h * 0.34, 3, 3); fr(ctx, w * 0.55, h * 0.34, 3, 3);
+  },
+  orb(ctx, w, h, c, d, t) {
+    const r = w / 2, cx = w / 2, cy = h / 2 + Math.sin(t * 0.1) * 1;
+    ctx.fillStyle = d; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = c; ctx.beginPath(); ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.25, 0, Math.PI * 2); ctx.fill();
+    eyes(ctx, cx - 5, cy - 2, 6);
+    // ë¶ˆê½ƒ ê¼¬ë¦¬
+    ctx.fillStyle = c; fr(ctx, cx - 2, cy + r * 0.6, 4, h * 0.2);
+  },
+  jelly(ctx, w, h, c, d) {
+    ctx.fillStyle = c; fr(ctx, w * 0.1, h * 0.1, w * 0.8, h * 0.4);      // ë”
+    fr(ctx, w * 0.2, h * 0.02, w * 0.6, h * 0.14);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'; fr(ctx, w * 0.2, h * 0.16, w * 0.2, h * 0.18);
+    ctx.fillStyle = d;                                                   // ì´‰ìˆ˜
+    for (let i = 0; i < 5; i++) fr(ctx, w * (0.15 + i * 0.16), h * 0.5, 3, h * (0.3 + (i % 2) * 0.18));
+    eyes(ctx, w * 0.4, h * 0.28, w * 0.18);
+  },
+  crab(ctx, w, h, c, d) {
+    ctx.fillStyle = c; fr(ctx, w * 0.2, h * 0.4, w * 0.6, h * 0.4);      // ëª¸í†µ
+    ctx.fillStyle = d; fr(ctx, 0, h * 0.5, w * 0.2, h * 0.2); fr(ctx, w * 0.8, h * 0.5, w * 0.2, h * 0.2); // ì§‘ê²Œ
+    fr(ctx, 0, h * 0.42, w * 0.1, h * 0.12); fr(ctx, w * 0.9, h * 0.42, w * 0.1, h * 0.12);
+    ctx.fillStyle = c; for (let i = 0; i < 3; i++) { fr(ctx, w * (0.22 + i * 0.2), h * 0.78, 3, h * 0.2); fr(ctx, w * (0.62 + i * 0.06), h * 0.78, 3, h * 0.2); }
+    eyes(ctx, w * 0.38, h * 0.32, w * 0.2); ctx.fillStyle = c; fr(ctx, w * 0.4, h * 0.28, 2, h * 0.08); fr(ctx, w * 0.58, h * 0.28, 2, h * 0.08);
+  },
+  rat(ctx, w, h, c, d) {
+    ctx.fillStyle = c; fr(ctx, w * 0.1, h * 0.4, w * 0.66, h * 0.5);     // ëª¸í†µ
+    fr(ctx, w * 0.66, h * 0.3, w * 0.28, h * 0.4);                       // ë¨¸ë¦¬
+    ctx.fillStyle = d; fr(ctx, 0, h * 0.55, w * 0.16, 3);                // ê¼¬ë¦¬
+    fr(ctx, w * 0.7, h * 0.18, 5, 6); fr(ctx, w * 0.84, h * 0.18, 5, 6); // ê·€
+    ctx.fillStyle = '#ff0000'; fr(ctx, w * 0.86, h * 0.4, 3, 3);         // ëˆˆ
+    ctx.fillStyle = '#ffffff'; fr(ctx, w * 0.92, h * 0.5, 3, 2);         // ì´ë¹¨
+  },
+  octopus(ctx, w, h, c, d) {
+    ctx.fillStyle = c; fr(ctx, w * 0.18, h * 0.08, w * 0.64, h * 0.46);  // ë¨¸ë¦¬
+    fr(ctx, w * 0.28, h * 0.0, w * 0.44, h * 0.12);
+    ctx.fillStyle = d;                                                   // ë‹¤ë¦¬
+    for (let i = 0; i < 6; i++) fr(ctx, w * (0.12 + i * 0.13), h * 0.5, 4, h * (0.35 + (i % 2) * 0.15));
+    eyes(ctx, w * 0.36, h * 0.26, w * 0.2);
+  },
+  yeti(ctx, w, h, c, d) {
+    ctx.fillStyle = d; fr(ctx, w * 0.24, h * 0.72, w * 0.2, h * 0.28); fr(ctx, w * 0.56, h * 0.72, w * 0.2, h * 0.28); // ë‹¤ë¦¬
+    ctx.fillStyle = c; fr(ctx, w * 0.14, h * 0.3, w * 0.72, h * 0.46);  // ëª¸í†µ
+    fr(ctx, w * 0.02, h * 0.36, w * 0.16, h * 0.3); fr(ctx, w * 0.82, h * 0.36, w * 0.16, h * 0.3); // íŒ”
+    fr(ctx, w * 0.3, h * 0.04, w * 0.4, h * 0.3);                       // ë¨¸ë¦¬
+    ctx.fillStyle = d; fr(ctx, w * 0.36, h * 0.34, w * 0.28, h * 0.06); // ìž…
+    eyes(ctx, w * 0.4, h * 0.16, w * 0.18);
+  },
+  mudman(ctx, w, h, c, d) {
+    ctx.fillStyle = d; fr(ctx, w * 0.1, h * 0.7, w * 0.8, h * 0.3);     // ë°”ë‹¥ ì§„í™
+    ctx.fillStyle = c; fr(ctx, w * 0.18, h * 0.3, w * 0.64, h * 0.5);   // ëª¸
+    fr(ctx, w * 0.28, h * 0.16, w * 0.44, h * 0.2);                     // ë¨¸ë¦¬
+    ctx.fillStyle = d; for (let i = 0; i < 4; i++) fr(ctx, w * (0.2 + i * 0.18), h * 0.3, 4, 4); // ë°©ìš¸
+    eyes(ctx, w * 0.38, h * 0.24, w * 0.18);
+  },
+  roper(ctx, w, h, c, d) {
+    ctx.fillStyle = c; fr(ctx, w * 0.28, h * 0.4, w * 0.44, h * 0.6);   // ê¸°ë‘¥
+    ctx.fillStyle = d;                                                  // ì´‰ìˆ˜
+    for (let i = 0; i < 6; i++) { const a = (i / 5 - 0.5); fr(ctx, w * (0.5 + a * 0.7) - 2, h * 0.1, 4, h * 0.4); }
+    ctx.fillStyle = c; fr(ctx, w * 0.3, h * 0.36, w * 0.4, h * 0.12);
+    eyes(ctx, w * 0.4, h * 0.52, w * 0.18);
+  },
 };
-

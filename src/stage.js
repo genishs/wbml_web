@@ -1,349 +1,382 @@
-import { TILE_SIZE, COLORS } from './constants.js';
-import { Enemy } from './enemy.js';
-import { SHOP_TYPE } from './equipment.js';
-import { createSignpost } from './signpost.js';
+import { GROUND_Y, HUD_W, VIEW_W, COLORS } from './constants.js';
+import { Enemy, Boss, enemyAirborne } from './enemy.js';
+import { Pickup } from './pickup.js';
+import { SWORD } from './equipment.js';
 
-// Each stage: platforms, enemies, shop positions, goal
+export const MAX_ROUNDS = 11;
+
+// 아케이드 11라운드 정본 — 1차 자료(사용자 제공 doc/원더보이보스정보.html) 기준.
+// HP는 그라디우스(공격력1) 기준 타수. 검 드롭: R2 킹뱀파이어→브로드, R5 자이언트콩→그레이트,
+// R7 코인컬렉터→엑스칼리버, R8 데몬→레전드. (그라디우스는 R1 NPC 지급)
+// ※ 자료대로 R2/R5/R7/R8은 2단 보스(chain). X-1=검 드롭, X-2=열쇠 드롭(마지막 보스 격파 시 성문 개방).
+// MEKA DRAGON hp2=192 = 2페이즈 데이터(2페이즈 전투는 후속 #8).
+// dir: 진행 방향(RL 라운드는 데이터에만 표기, 카메라 반전은 후속 단계). segments: 구역 시퀀스.
+//   town  = 문(상점/시설) 밀집 / field = 적·픽업·지형 / climb = 다층 플랫폼 / bossgate = 보스문
+const ROUNDS = [
+  { name: 'DEATH MASTER', sky: '#0088ff', boss: 'fly',    hp: 4,   score: 2000,  sword: null,        dir: 'LR',
+    enemies: ['snake','myconid','fangbat'],
+    segments: [ { type:'town', len:640, doors:['quest','shield','boots'] }, { type:'field', len:880, terrain:'grass', enemies:3, pickup:'buff' }, { type:'climb', len:400 }, { type:'bossgate', len:240 } ] },
+  { name: 'KING VAMPIRE', sky: '#1f6a3a', boss: 'fly',    hp: 6,  score: 2000,  sword: 'broad',     dir: 'LR',
+    enemies: ['myconid','snake','fangbat'],
+    chain: [ { name:'KING VAMPIRE',   type:'fly',    hp:6, score:2000, sword:'broad' },
+             { name:'MYCONID MASTER', type:'ground', hp:8, score:2000, sword:null   } ],
+    segments: [ { type:'town', len:600, doors:['shield','boots','magic'] }, { type:'field', len:1000, terrain:'water', enemies:3, pickup:'heart' }, { type:'climb', len:460 }, { type:'field', len:560, terrain:'grass', enemies:2, pickup:'potion' }, { type:'bossgate', len:240 } ] },
+  { name: 'RED KNIGHT', sky: '#44506a', boss: 'ground', hp: 20,  score: 3000,  sword: null,        dir: 'RL',
+    enemies: ['orc','skeleton','fangbat'],
+    segments: [ { type:'field', len:760, terrain:'stone', enemies:3, pickup:'gold' }, { type:'town', len:520, doors:['shield','armor'] }, { type:'climb', len:480 }, { type:'field', len:640, terrain:'stone', enemies:2, pickup:'buff' }, { type:'bossgate', len:240 } ] },
+  { name: 'KRAKEN', sky: '#0077cc', boss: 'fly',    hp: 24,  score: 3000,  sword: null,        dir: 'RL',
+    enemies: ['jellyfish','crab','octopus'],
+    segments: [ { type:'field', len:820, terrain:'coast', enemies:3, pickup:'gold' }, { type:'town', len:520, doors:['boots','magic'] }, { type:'field', len:820, terrain:'water', enemies:2, pickup:'heart' }, { type:'bossgate', len:240 } ] },
+  { name: 'GIANT KONG', sky: '#338800', boss: 'ground', hp: 64,  score: 3000,  sword: 'great',     dir: 'LR',
+    enemies: ['orc','werebat','anaconda'],
+    chain: [ { name:'GIANT KONG',   type:'ground', hp:64, score:3000, sword:'great' },
+             { name:'VAMPIRE BATS', type:'fly',    hp:16, score:2000, sword:null    } ],
+    segments: [ { type:'town', len:600, doors:['shield','armor','magic'] }, { type:'field', len:1120, terrain:'mountain', enemies:4, pickup:'buff' }, { type:'climb', len:540 }, { type:'bossgate', len:240 } ] },
+  { name: 'SPHINX', sky: '#aaaa77', boss: 'ground', hp: 84,  score: 3000,  sword: null,        dir: 'LR',
+    enemies: ['anaconda','skeleton','wisp'],
+    segments: [ { type:'town', len:580, doors:['shield','armor','magic'] }, { type:'field', len:1140, terrain:'desert', enemies:3, pickup:'potion' }, { type:'climb', len:480 }, { type:'bossgate', len:240 } ] },
+  { name: 'COIN COLLECTOR', sky: '#7a1f1f', boss: 'fly',    hp: 32,  score: 4000,  sword: 'excalibur', dir: 'LR',
+    enemies: ['wisp','wererat','ghost'],
+    chain: [ { name:'COIN COLLECTOR', type:'fly',    hp:32, score:4000, sword:'excalibur' },
+             { name:'BLUE KNIGHT',    type:'ground', hp:64, score:4000, sword:null        } ],
+    segments: [ { type:'field', len:900, terrain:'lava', enemies:3, pickup:'gold' }, { type:'town', len:520, doors:['armor','magic'] }, { type:'field', len:820, terrain:'lava', enemies:3, pickup:'buff' }, { type:'bossgate', len:240 } ] },
+  { name: 'DEMON', sky: '#2a1f3a', boss: 'ground', hp: 96,  score: 3000,  sword: 'legend',    dir: 'LR',
+    enemies: ['wisp','goblin','werebat'],
+    chain: [ { name:'DEMON',      type:'ground', hp:96, score:3000, sword:'legend' },
+             { name:'HOB GOBLIN', type:'ground', hp:96, score:4000, sword:null     } ],
+    segments: [ { type:'field', len:1000, terrain:'dungeon', enemies:3, pickup:'heart' }, { type:'town', len:520, doors:['armor','magic'] }, { type:'climb', len:540 }, { type:'bossgate', len:240 } ] },
+  { name: 'SNOW KONG', sky: '#88ccee', boss: 'ground', hp: 96,  score: 4000,  sword: null,        dir: 'RL',
+    enemies: ['snowyeti','yeti','ratmaster'],
+    segments: [ { type:'town', len:560, doors:['armor','magic'] }, { type:'field', len:1240, terrain:'ice', enemies:4, pickup:'buff' }, { type:'climb', len:560 }, { type:'bossgate', len:240 } ] },
+  { name: 'SILVER KNIGHT', sky: '#667088', boss: 'ground', hp: 96,  score: 5000,  sword: null,        dir: 'LR',
+    enemies: ['undead','goblin','skeleton'],
+    segments: [ { type:'field', len:1040, terrain:'castle', enemies:3, pickup:'potion' }, { type:'town', len:520, doors:['shield','armor'] }, { type:'climb', len:520 }, { type:'bossgate', len:240 } ] },
+  { name: 'MEKA DRAGON', sky: '#000066', boss: 'ground', hp: 256, hp2: 192, score: 30000, sword: null, dir: 'LR', final: true,
+    enemies: ['undead','goblin','roper'],
+    segments: [ { type:'field', len:1200, terrain:'castle', enemies:4, pickup:'gold' }, { type:'climb', len:600 }, { type:'field', len:940, terrain:'castle', enemies:3, pickup:'heart' }, { type:'bossgate', len:300 } ] },
+];
+
+export function getRound(n) {
+  return ROUNDS[Math.max(0, Math.min(ROUNDS.length - 1, n - 1))];
+}
+
+// 문(상점 입구) 정의
+function makeDoor(id, x, type) {
+  return { id, x, y: GROUND_Y - 52, w: 36, h: 52, type };
+}
+
+// 보스 문(검 보스/스테이지 보스 공용). 더 크고 위압적. boss=대상 Boss, drop='sword'|'key'.
+function makeBossDoor(id, x, type, boss, drop) {
+  const d = makeDoor(id, x, type);
+  d.y = GROUND_Y - 70; d.w = 48; d.h = 70;
+  d.boss = boss; d.drop = drop; d.cleared = false;
+  if (drop === 'sword') d.swordReward = boss.swordReward;
+  return d;
+}
+
 export function buildStage(stageNum) {
-  const groundY = 312;
-  const platforms = [];
-  const enemies = [];
-  const pickups = [];
-  const doors = [];
-  const rooms = {};
-  const signposts = [];
+  const round  = getRound(stageNum);
+  const dir    = round.dir || 'LR';
+  const segs   = round.segments;
+  const eTypes = round.enemies;
+  const buff   = ['gauntlet', 'helmet', 'wingboots'][(stageNum - 1) % 3];
 
-  // Ground (always)
-  const groundLen = 2400 + stageNum * 800;
-  platforms.push({ x: 0, y: groundY, w: groundLen, h: 48, isGround: true });
+  const fieldLen  = segs.reduce((s, g) => s + g.len, 0);
+  const groundLen = fieldLen + 220;                     // 보스문 앞 여유 바닥
+  const platforms = [{ x: 0, y: GROUND_Y, w: groundLen, h: 60, isGround: true }];
+  const enemies   = [];
+  const doors     = [];
+  const pickups   = [];
 
-  // Stage-specific layout
-  if (stageNum === 1) {
-    platforms.push({ x: 300, y: 252, w: 84, h: 16 });
-    platforms.push({ x: 640, y: 224, w: 92, h: 16 });
-    platforms.push({ x: 980, y: 244, w: 112, h: 16 });
-    platforms.push({ x: 1300, y: 212, w: 88, h: 16 });
-    platforms.push({ x: 1620, y: 238, w: 120, h: 16 });
+  // 보스 체인(스탯). 단일 보스 라운드는 1체, 2단 라운드(R2/R5/R7/R8)는 2체.
+  // 원작 구조: 검 보스(X-1)는 별도 문/방 → 처치 시 검 드롭. 마지막=스테이지 보스 → 열쇠 드롭.
+  const chainSpec = round.chain || [{
+    name: round.name, type: round.boss, hp: round.hp, score: round.score, sword: round.sword,
+  }];
+  const bossChain = chainSpec.map(s => new Boss(s.type, fieldLen, GROUND_Y - 48, {
+    name: s.name, hp: s.hp, score: s.score,
+    swordReward: s.sword ? SWORD[s.sword] : null,
+  }));
+  const boss       = bossChain[0];
+  const stageBoss  = bossChain[bossChain.length - 1];          // 열쇠 드롭(스테이지 보스)
+  const swordBosses = bossChain.slice(0, -1);                  // 검 드롭(별도 방)
 
-    enemies.push(new Enemy('snake', 760, groundY - 12));
-    enemies.push(new Enemy('anaconda', 930, groundY - 14, { patrolMinX: 860, patrolMaxX: 1030 }));
-    enemies.push(new Enemy('snake', 1180, groundY - 12));
-    enemies.push(new Enemy('anaconda', 1460, groundY - 14, { patrolMinX: 1390, patrolMaxX: 1570 }));
-    enemies.push(new Enemy('snake', 1730, groundY - 12));
+  // 세그먼트를 왼쪽부터 깔며 각 구역에 요소 배치 (마을→필드→다층→보스문)
+  let cursor = 0, ei = 0, bossDoor = null;
+  const townSpans = [];
+  for (const seg of segs) {
+    const x0 = cursor, x1 = cursor + seg.len, mid = (x0 + x1) / 2;
 
-    signposts.push(createSignpost({
-      x: 112,
-      y: groundY - 28,
-      title: '무기 상점',
-      message: '앞의 상점에서 무기를 구매하라.',
-    }));
-
-    doors.push(makeDoor('shop-1a', 190, groundY, 'shop', SHOP_TYPE.WEAPON));
-    doors.push(makeDoor('shop-1b', 1240, groundY, 'shop', SHOP_TYPE.SHIELD));
-    doors.push(makeDoor('boss-1', 1840, groundY, 'boss'));
-
-    // Gold pickups
-    for (let i = 0; i < 12; i++) {
-      pickups.push({ x: 150 + i * 150, y: groundY - 32, type: 'gold', value: 10, collected: false });
+    if (seg.type === 'town') {
+      townSpans.push({ x0, x1 });
+      const list = seg.doors || [];
+      list.forEach((t, i) => {
+        const dx = x0 + seg.len * (i + 1) / (list.length + 1) - 18;
+        doors.push(t === 'quest' ? makeDoor('quest', dx, 'quest') : makeDoor('shop-' + t, dx, t));
+      });
+    } else if (seg.type === 'field') {
+      const n = seg.enemies ?? 3;
+      for (let k = 0; k < n; k++) {
+        const t  = eTypes[ei++ % eTypes.length];
+        const ex = x0 + seg.len * (k + 0.5) / n;
+        const ey = enemyAirborne(t) ? GROUND_Y - 150 : GROUND_Y - 90;
+        enemies.push(new Enemy(t, ex, ey, { patrolMin: ex - 80, patrolMax: ex + 80 }));
+      }
+      for (let px = x0 + 140; px < x1 - 140; px += 320) {
+        platforms.push({ x: px, y: GROUND_Y - (70 + (px % 3) * 12), w: 100, h: 16, terrain: seg.terrain });
+      }
+      if (seg.pickup) {
+        const type = seg.pickup === 'buff' ? buff : seg.pickup;
+        const low  = seg.pickup === 'gold' || seg.pickup === 'potion';
+        const opt  = seg.pickup === 'gold' ? { amount: 50 } : undefined;
+        pickups.push(new Pickup(type, mid, GROUND_Y - (low ? 18 : 70), opt));
+      }
+    } else if (seg.type === 'climb') {
+      const steps = seg.steps ?? 4;
+      for (let k = 0; k < steps; k++) {
+        const px = x0 + seg.len * (k + 0.5) / steps - 50;
+        platforms.push({ x: px, y: GROUND_Y - 60 - k * 38, w: 92, h: 16 });
+      }
+      const t  = eTypes[ei++ % eTypes.length];
+      const ey = enemyAirborne(t) ? GROUND_Y - 150 : GROUND_Y - 90;
+      enemies.push(new Enemy(t, mid, ey, { patrolMin: mid - 60, patrolMax: mid + 60 }));
+    } else if (seg.type === 'bossgate') {
+      bossDoor = makeBossDoor('boss-door', mid - 24, 'boss', stageBoss, 'key');
+      doors.push(bossDoor);
     }
-  } else if (stageNum === 2) {
-    platforms.push({ x: 250, y: 248, w: 90, h: 16 });
-    platforms.push({ x: 520, y: 212, w: 120, h: 16 });
-    platforms.push({ x: 840, y: 172, w: 80, h: 16 });
-    platforms.push({ x: 1160, y: 228, w: 100, h: 16 });
-    platforms.push({ x: 1460, y: 190, w: 88, h: 16 });
-    platforms.push({ x: 1760, y: 236, w: 118, h: 16 });
-    platforms.push({ x: 2140, y: 220, w: 92, h: 16 });
-
-    enemies.push(new Enemy('orc', 420, groundY - 26));
-    enemies.push(new Enemy('goblin', 720, groundY - 26));
-    enemies.push(new Enemy('fangBat', 900, 170));
-    enemies.push(new Enemy('myconid', 1160, groundY - 20));
-    enemies.push(new Enemy('orc', 1490, groundY - 26));
-    enemies.push(new Enemy('goblin', 1860, groundY - 26));
-    enemies.push(new Enemy('vampireBat', 2170, 176));
-
-    doors.push(makeDoor('shop-2a', 340, groundY, 'shop', SHOP_TYPE.WEAPON));
-    doors.push(makeDoor('shop-2b', 1320, groundY, 'shop', SHOP_TYPE.SHIELD));
-    doors.push(makeDoor('shop-2c', 2060, groundY, 'shop', SHOP_TYPE.BOOTS));
-    doors.push(makeDoor('boss-2', 2360, groundY, 'boss'));
-
-    for (let i = 0; i < 15; i++) {
-      pickups.push({ x: 200 + i * 160, y: groundY - 32, type: 'gold', value: 15, collected: false });
-    }
-  } else if (stageNum === 3) {
-    platforms.push({ x: 300, y: 248, w: 90, h: 16 });
-    platforms.push({ x: 640, y: 212, w: 100, h: 16 });
-    platforms.push({ x: 1000, y: 180, w: 80, h: 16 });
-    platforms.push({ x: 1360, y: 224, w: 110, h: 16 });
-    platforms.push({ x: 1720, y: 192, w: 90, h: 16 });
-    platforms.push({ x: 2100, y: 236, w: 120, h: 16 });
-
-    enemies.push(new Enemy('knight', 480, groundY - 28));
-    enemies.push(new Enemy('orc', 760, groundY - 26));
-    enemies.push(new Enemy('goblin', 1040, groundY - 26));
-    enemies.push(new Enemy('knight', 1400, groundY - 28));
-    enemies.push(new Enemy('orc', 1760, groundY - 26));
-
-    doors.push(makeDoor('shop-3a', 190, groundY, 'shop', SHOP_TYPE.WEAPON));
-    doors.push(makeDoor('shop-3b', 1180, groundY, 'shop', SHOP_TYPE.ARMOR));
-    doors.push(makeDoor('boss-3', 2160, groundY, 'boss'));
-
-    for (let i = 0; i < 18; i++) {
-      pickups.push({ x: 200 + i * 170, y: groundY - 32, type: 'gold', value: 20, collected: false });
-    }
-  } else if (stageNum === 4) {
-    platforms.push({ x: 280, y: 240, w: 100, h: 16 });
-    platforms.push({ x: 600, y: 200, w: 90, h: 16 });
-    platforms.push({ x: 960, y: 168, w: 80, h: 16 });
-    platforms.push({ x: 1320, y: 216, w: 110, h: 16 });
-    platforms.push({ x: 1680, y: 180, w: 88, h: 16 });
-    platforms.push({ x: 2060, y: 228, w: 100, h: 16 });
-    platforms.push({ x: 2460, y: 200, w: 90, h: 16 });
-
-    enemies.push(new Enemy('redKnight', 440, groundY - 28));
-    enemies.push(new Enemy('knight', 720, groundY - 28));
-    enemies.push(new Enemy('orc', 1000, groundY - 26));
-    enemies.push(new Enemy('redKnight', 1380, groundY - 28));
-    enemies.push(new Enemy('knight', 1740, groundY - 28));
-    enemies.push(new Enemy('orc', 2120, groundY - 26));
-
-    doors.push(makeDoor('shop-4a', 190, groundY, 'shop', SHOP_TYPE.WEAPON));
-    doors.push(makeDoor('shop-4b', 1200, groundY, 'shop', SHOP_TYPE.SHIELD));
-    doors.push(makeDoor('shop-4c', 2200, groundY, 'shop', SHOP_TYPE.ARMOR));
-    doors.push(makeDoor('boss-4', 2760, groundY, 'boss'));
-
-    for (let i = 0; i < 20; i++) {
-      pickups.push({ x: 200 + i * 180, y: groundY - 32, type: 'gold', value: 25, collected: false });
-    }
-  } else if (stageNum === 5) {
-    platforms.push({ x: 300, y: 236, w: 100, h: 16 });
-    platforms.push({ x: 620, y: 196, w: 90, h: 16 });
-    platforms.push({ x: 980, y: 160, w: 80, h: 16 });
-    platforms.push({ x: 1360, y: 208, w: 110, h: 16 });
-    platforms.push({ x: 1740, y: 172, w: 88, h: 16 });
-    platforms.push({ x: 2120, y: 220, w: 100, h: 16 });
-    platforms.push({ x: 2540, y: 188, w: 92, h: 16 });
-    platforms.push({ x: 2940, y: 228, w: 120, h: 16 });
-
-    enemies.push(new Enemy('silverKnight', 460, groundY - 28));
-    enemies.push(new Enemy('redKnight', 740, groundY - 28));
-    enemies.push(new Enemy('knight', 1020, groundY - 28));
-    enemies.push(new Enemy('silverKnight', 1420, groundY - 28));
-    enemies.push(new Enemy('redKnight', 1800, groundY - 28));
-    enemies.push(new Enemy('knight', 2180, groundY - 28));
-    enemies.push(new Enemy('silverKnight', 2600, groundY - 28));
-
-    doors.push(makeDoor('shop-5a', 190, groundY, 'shop', SHOP_TYPE.WEAPON));
-    doors.push(makeDoor('shop-5b', 1300, groundY, 'shop', SHOP_TYPE.ARMOR));
-    doors.push(makeDoor('shop-5c', 2400, groundY, 'shop', SHOP_TYPE.SHIELD));
-    doors.push(makeDoor('boss-5', 3200, groundY, 'boss'));
-
-    for (let i = 0; i < 24; i++) {
-      pickups.push({ x: 200 + i * 180, y: groundY - 32, type: 'gold', value: 30, collected: false });
-    }
+    cursor = x1;
   }
 
-  for (const door of doors) {
-    rooms[door.roomId] = buildRoom(door, stageNum);
+  // 시설 자동 배치: 병원은 비최종 라운드마다 1개(마지막 마을 끝), 바는 R1·R6(첫 마을 앞)
+  if (!round.final && townSpans.length) {
+    const t = townSpans[townSpans.length - 1];
+    doors.push(makeDoor('hospital', t.x1 - 70, 'hospital'));
+  }
+  if ((stageNum === 1 || stageNum === 6) && townSpans.length) {
+    const t = townSpans[0];
+    doors.push(makeDoor('bar', t.x0 + 40, 'bar'));
   }
 
-  const goalX = groundLen - 120;
+  // 검 보스 문(2단 라운드의 X-1): 스테이지 중반 별도 방. 처치 시 검을 떨어뜨리고 방을 나온다.
+  // 원작대로 검 가디언은 '비밀 입구' 뒤 — 숨은 문(↑로 탐색해 드러냄).
+  swordBosses.forEach((sb, i) => {
+    const sx = Math.round(fieldLen * (0.38 + i * 0.18));
+    const d = makeBossDoor('sword-door-' + i, sx, 'swordboss', sb, 'sword');
+    d.hidden = true; d.revealed = false;
+    doors.push(d);
+  });
 
-  return { platforms, enemies, pickups, doors, rooms, signposts, goalX, groundLen };
-}
+  // 숨은 보너스 상점: 특정 지점에서 ↑를 눌러야 드러나는 추가 상점(원작의 ↑탐색 재미).
+  const HIDDEN_SHOP = { 3: 'shield', 4: 'magic', 6: 'magic', 9: 'armor', 10: 'magic' };
+  if (HIDDEN_SHOP[stageNum]) {
+    const hx = Math.round(fieldLen * 0.64);
+    const d = makeDoor('hidden-shop', hx, HIDDEN_SHOP[stageNum]);
+    d.hidden = true; d.revealed = false;
+    doors.push(d);
+  }
 
-function makeDoor(id, x, groundY, roomType, shopType = null) {
+  // 성문(스테이지 출구): 필드 끝. 열쇠 보유 시 통과해 클리어. 보스방 안이 아니라 필드에 있음.
+  const castleGate = { x: groundLen - 100, y: GROUND_Y - 132, w: 60, h: 132 };
+
+  // R1: 첫 NPC(그라디우스 + 물약) 직후, 검 받기 전 길을 막는 장애물
+  const gate = stageNum === 1 ? { x: 250, y: GROUND_Y - 90, w: 26, h: 90 } : null;
+
   return {
-    id,
-    x,
-    y: groundY - 52,
-    w: 40,
-    h: 52,
-    roomId: id,
-    roomType,
-    shopType,
+    platforms, enemies, doors, boss, bossChain, groundLen, gate, castleGate, pickups, bossDoor, dir,
+    sky: round.sky, roundName: round.name, final: !!round.final,
   };
 }
 
-function buildRoom(door, stageNum) {
-  const roomGroundY = 312;
-  const platforms = [{ x: 0, y: roomGroundY, w: 640, h: 48, isGround: true }];
-  const enemies = [];
-  const merchant = { x: 470, y: roomGroundY - 56, w: 56, h: 56 };
-  const exitDoor = { x: 56, y: roomGroundY - 52, w: 40, h: 52 };
-
-  if (door.roomType === 'boss') {
-    const bossType = getBossType(stageNum);
-    const bossX = bossType === 'dragon' ? 400 : 430;
-    const bossY = bossType === 'death' ? roomGroundY - 84 : bossType === 'mushroomKing' ? roomGroundY - 28 : roomGroundY - 40;
-    enemies.push(new Enemy(bossType, bossX, bossY));
-  }
-
-  return {
-    id: door.id,
-    type: door.roomType,
-    shopType: door.shopType,
-    platforms,
-    enemies,
-    merchant,
-    exitDoor,
-    entryX: 112,
-    entryY: roomGroundY - 28,
-    worldDoorId: door.id,
-    cleared: false,
-  };
+export function drawStage(ctx, stageData, camX, hasKey) {
+  const { platforms, enemies, doors } = stageData;
+  _drawSky(ctx, stageData.sky);
+  _drawPlatforms(ctx, platforms, camX);
+  _drawDoors(ctx, doors, camX);
+  _drawCastleGate(ctx, stageData.castleGate, camX, hasKey);   // 스테이지 끝 성문(필드)
+  for (const e of enemies) e.draw(ctx, camX);
 }
 
-function getBossType(stageNum) {
-  switch (stageNum) {
-    case 1: return 'death';
-    case 2: return 'mushroomKing';
-    case 3: return 'dragon';
-    case 4: return 'mechDragon';
-    case 5: return 'vampireLord';
-    default: return 'dragon';
+// 보스방(아레나): 문을 열고 들어가면 나오는 화면 가득한 석조 전투방. 보스를 직접 상대.
+// 성문은 방 안이 아니라 필드(스테이지 끝)에 있다. 보스 처치→보상(검/열쇠) 드롭→주우면 방을 나온다.
+// camX는 항상 0(한 화면 고정).
+export function drawArena(ctx, arena, boss) {
+  const L = HUD_W, R = HUD_W + VIEW_W;
+  // 뒷벽 + 벽돌
+  ctx.fillStyle = '#241c2e'; ctx.fillRect(L, 0, VIEW_W, GROUND_Y);
+  ctx.fillStyle = '#2f2638';
+  for (let y = 8; y < GROUND_Y; y += 26) {
+    const off = ((y / 26) | 0) % 2 ? 24 : 0;
+    for (let x = L - 48 + off; x < R; x += 48) {
+      const bx = Math.max(L, x);
+      ctx.fillRect(bx, y, Math.min(x + 44, R) - bx, 22);
+    }
+  }
+  // 바닥
+  ctx.fillStyle = '#37303f'; ctx.fillRect(L, GROUND_Y, VIEW_W, 60);
+  ctx.fillStyle = '#2a2433';
+  for (let x = L; x < R; x += 32) ctx.fillRect(x, GROUND_Y, 2, 60);
+  // 좌우 입구(닫힌 철문 — 가둠 연출) + 횃불
+  ctx.fillStyle = '#1a1422';
+  ctx.fillRect(L, 0, 14, GROUND_Y); ctx.fillRect(R - 14, 0, 14, GROUND_Y);
+  ctx.fillStyle = '#5a5a6a';
+  for (let by = 0; by < GROUND_Y; by += 16) { ctx.fillRect(L, by, 12, 12); ctx.fillRect(R - 12, by, 12, 12); }
+  _torch(ctx, L + 26, GROUND_Y - 120);
+  _torch(ctx, R - 64, GROUND_Y - 120);
+  if (boss && !(boss.dead && boss.deathTimer <= 0)) boss.draw(ctx, 0);
+}
+
+// 성문(라운드 출구). 열쇠 보유 시 창살이 올라가 통과 가능한 모습.
+function _drawCastleGate(ctx, g, camX, open) {
+  if (!g) return;
+  const sx = Math.round(g.x - camX + HUD_W);
+  if (sx + g.w * 2 < HUD_W || sx - g.w > 640) return;
+
+  // 성벽 기둥(문 양옆)
+  ctx.fillStyle = '#6a6a78';
+  ctx.fillRect(sx - 16, g.y - 24, 16, g.h + 24);
+  ctx.fillRect(sx + g.w, g.y - 24, 16, g.h + 24);
+  ctx.fillStyle = '#52525e';                    // 흉벽(총안)
+  for (let bx = -16; bx < g.w + 16; bx += 12) {
+    if (((bx + 16) / 12 | 0) % 2 === 0) ctx.fillRect(sx + bx, g.y - 32, 10, 10);
+  }
+  // 아치 입구(어두운 안쪽)
+  ctx.fillStyle = '#0a0810';
+  ctx.fillRect(sx, g.y, g.w, g.h);
+  ctx.beginPath(); ctx.arc(sx + g.w / 2, g.y, g.w / 2, Math.PI, 0); ctx.fill();
+
+  if (open) {
+    // 열린 상태: 창살이 위로 올라가 있고 안쪽에서 빛이 새어나옴
+    ctx.fillStyle = 'rgba(255,230,140,0.25)';
+    ctx.fillRect(sx + 4, g.y + 6, g.w - 8, g.h - 6);
+    ctx.fillStyle = '#7a5a2a';
+    for (let i = 0; i < 5; i++) ctx.fillRect(sx + 4 + i * (g.w / 5), g.y - 6, 3, 10);
+    ctx.fillStyle = '#ffe060'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('▶ CLEAR', sx + g.w / 2, g.y - 14); ctx.textAlign = 'left';
+  } else {
+    // 잠긴 상태: 쇠창살(포트컬리스)
+    ctx.fillStyle = '#9a9aa8';
+    for (let i = 0; i <= 4; i++) ctx.fillRect(sx + 3 + i * (g.w - 6) / 4, g.y + 4, 3, g.h - 4);
+    for (let j = 0; j < g.h; j += 16) ctx.fillRect(sx + 3, g.y + 4 + j, g.w - 6, 3);
+    ctx.fillStyle = '#ffcc00';                  // 자물쇠
+    ctx.fillRect(sx + g.w / 2 - 5, g.y + g.h / 2 - 5, 10, 9);
+    ctx.fillStyle = '#0a0810'; ctx.fillRect(sx + g.w / 2 - 1, g.y + g.h / 2 - 1, 2, 4);
   }
 }
 
-export function drawPlatforms(ctx, platforms, camX) {
+function _drawSky(ctx, sky) {
+  ctx.fillStyle = sky || '#0088ff';
+  ctx.fillRect(HUD_W, 0, 528, 360);
+  // 구름
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  for (const [cx, cy] of [[200, 60],[350, 40],[120, 80],[450, 55]]) {
+    _cloud(ctx, HUD_W + cx, cy);
+  }
+}
+
+function _cloud(ctx, x, y) {
+  ctx.fillRect(x, y, 48, 14);
+  ctx.fillRect(x + 8, y - 8, 32, 12);
+}
+
+function _drawPlatforms(ctx, platforms, camX) {
   for (const p of platforms) {
-    const px = p.x - camX;
-    if (px + p.w < 0 || px > 640) continue;
-
+    const sx = p.x - camX + HUD_W;
+    if (sx + p.w < HUD_W || sx > 640) continue;
     if (p.isGround) {
-      ctx.fillStyle = COLORS.groundTop;
-      ctx.fillRect(px, p.y, p.w, 8);
-      ctx.fillStyle = COLORS.ground;
-      ctx.fillRect(px, p.y + 8, p.w, p.h - 8);
-      // Grass pattern
-      for (let tx = 0; tx < p.w; tx += 32) {
-        ctx.fillStyle = '#50a030';
-        ctx.fillRect(px + tx, p.y, 28, 6);
+      ctx.fillStyle = '#00aa00';
+      ctx.fillRect(sx, p.y, p.w, 8);
+      ctx.fillStyle = '#885544';
+      ctx.fillRect(sx, p.y + 8, p.w, p.h - 8);
+      ctx.fillStyle = '#aa7766';
+      for (let tx = 0; tx < p.w; tx += 48) {
+        ctx.fillRect(sx + tx, p.y + 10, 40, 4);
       }
     } else {
-      ctx.fillStyle = '#907050';
-      ctx.fillRect(px, p.y, p.w, p.h);
-      ctx.fillStyle = '#b09060';
-      ctx.fillRect(px, p.y, p.w, 4);
+      ctx.fillStyle = '#774433';
+      ctx.fillRect(sx, p.y, p.w, p.h);
+      ctx.fillStyle = '#996655';
+      ctx.fillRect(sx, p.y, p.w, 5);
     }
   }
 }
 
-export function drawDoors(ctx, doors, camX, assets) {
-  for (const door of doors) {
-    const px = door.x - camX;
-    if (px + door.w < 0 || px > 640) continue;
+function _drawDoors(ctx, doors, camX) {
+  for (const d of doors) {
+    const sx = d.x - camX + HUD_W;
+    if (sx + d.w < HUD_W || sx > 640) continue;
 
-    ctx.fillStyle = door.roomType === 'boss' ? '#5e1b1b' : COLORS.shop;
-    ctx.fillRect(px, door.y, door.w, door.h);
-    ctx.fillStyle = '#160808';
-    ctx.fillRect(px + 6, door.y + 10, door.w - 12, door.h - 10);
+    // 숨은 문(미발견): 정식 문은 그리지 않고 미세한 반짝임만 — ↑로 탐색해 드러냄
+    if (d.hidden && !d.revealed) { _drawHiddenHint(ctx, sx, d); continue; }
+
+    if (d.type === 'boss' || d.type === 'swordboss') { _drawBossDoor(ctx, sx, d); continue; }
+
+    // 문 틀
+    ctx.fillStyle = '#6a4820';
+    ctx.fillRect(sx, d.y, d.w, d.h);
+    // 문 열린 부분 (어두운 내부)
+    ctx.fillStyle = '#100a06';
+    ctx.fillRect(sx + 4, d.y + 10, d.w - 8, d.h - 10);
+    // 손잡이
     ctx.fillStyle = '#d7b46a';
-    ctx.fillRect(px + door.w - 10, door.y + 27, 4, 4);
+    ctx.fillRect(sx + d.w - 9, d.y + 28, 4, 4);
+
+    // 상점 종류 라벨
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 9px monospace';
-    ctx.fillText(getDoorLabel(door), px + 5, door.y - 4);
-
-    const sign = door.roomType === 'boss' ? assets?.enemies?.dragon : getDoorIcon(door, assets);
-    if (sign && door.roomType !== 'boss') {
-      ctx.save();
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(sign, px + 11, door.y - 18, 18, 18);
-      ctx.restore();
-    } else if (sign) {
-      ctx.save();
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(sign, px + 6, door.y - 26, 28, 24);
-      ctx.restore();
-    }
-  }
-}
-
-export function drawPickups(ctx, pickups, camX) {
-  for (const p of pickups) {
-    if (p.collected) continue;
-    const px = p.x - camX;
-    if (px + 12 < 0 || px > 640) continue;
-    ctx.fillStyle = COLORS.gold;
-    ctx.beginPath();
-    ctx.arc(px + 6, p.y + 6, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffaa00';
     ctx.font = 'bold 8px monospace';
-    ctx.fillText('G', px + 3, p.y + 10);
+    ctx.textAlign = 'center';
+    const label = { weapon: 'WPN', shield: 'SHD', armor: 'ARM', boots: 'BTS', magic: 'MAG', quest: 'NPC', hospital: 'HOSP', bar: 'BAR' }[d.type] ?? '?';
+    ctx.fillText(label, sx + d.w / 2, d.y - 4);
+    ctx.textAlign = 'left';
   }
 }
 
-export function drawGoal(ctx, goalX, camX, groundY) {
-  const px = goalX - camX;
-  ctx.fillStyle = '#ffdd00';
-  ctx.fillRect(px, groundY - 80, 8, 80);
-  ctx.fillStyle = '#ff4400';
-  ctx.fillRect(px + 8, groundY - 80, 40, 24);
-  ctx.fillStyle = '#fff';
-  ctx.font = 'bold 9px monospace';
-  ctx.fillText('GOAL', px + 10, groundY - 63);
-}
+// 보스문: 위압적인 석문(아치). 열고 들어가면 보스방으로 전환.
+//  boss      = 스테이지 보스(열쇠) — 해골 장식 / swordboss = 검 보스 — 검 장식
+//  d.cleared = 이미 처치 → 어둑하게 + CLEAR 표시
+function _drawBossDoor(ctx, sx, d) {
+  const isSword = d.type === 'swordboss';
+  ctx.fillStyle = isSword ? '#1f2a3a' : '#3a2030';  // 석문 기둥
+  ctx.fillRect(sx - 6, d.y - 16, d.w + 12, d.h + 16);
+  ctx.fillStyle = '#0a0508';                         // 아치 내부(어둠)
+  ctx.fillRect(sx + 3, d.y, d.w - 6, d.h);
+  ctx.beginPath(); ctx.arc(sx + d.w / 2, d.y, d.w / 2 - 3, Math.PI, 0); ctx.fill();
 
-export function drawRoom(ctx, room, assets) {
-  ctx.fillStyle = room.type === 'boss' ? '#261010' : '#2a1f17';
-  ctx.fillRect(0, 0, 640, 360);
-
-  ctx.fillStyle = room.type === 'boss' ? '#4a2222' : '#4d3524';
-  for (let i = 0; i < 10; i++) {
-    ctx.fillRect(i * 64, 0, 32, 220);
+  const mx = sx + d.w / 2, my = d.y - 6;
+  if (isSword) {                                      // 검 장식
+    ctx.fillStyle = '#caa030'; ctx.fillRect(mx - 5, my + 1, 10, 2);
+    ctx.fillStyle = '#cfd6e0'; ctx.fillRect(mx - 1, my - 6, 2, 10);
+  } else {                                            // 해골 장식
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(mx - 5, my - 5, 10, 9);
+    ctx.fillStyle = '#0a0508'; ctx.fillRect(mx - 4, my - 2, 3, 3); ctx.fillRect(mx + 1, my - 2, 3, 3);
   }
 
-  drawPlatforms(ctx, room.platforms, 0);
-
-  drawInteriorDoor(ctx, room.exitDoor, room.type === 'boss' ? '#7b2d2d' : COLORS.shop);
-
-  if (room.type === 'shop') {
-    ctx.fillStyle = '#6e4c31';
-    ctx.fillRect(room.merchant.x - 10, room.merchant.y + 18, 84, 34);
-    ctx.fillStyle = '#d8c49a';
-    ctx.fillRect(room.merchant.x, room.merchant.y, 44, 52);
-    ctx.fillStyle = '#3a2416';
-    ctx.fillRect(room.merchant.x + 12, room.merchant.y + 12, 20, 8);
-    const icon = assets?.items?.shield || assets?.items?.swordBroad;
-    if (icon) {
-      ctx.save();
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(icon, room.merchant.x + 48, room.merchant.y + 8, 20, 20);
-      ctx.restore();
-    }
+  ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
+  if (d.cleared) {
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(sx - 6, d.y - 16, d.w + 12, d.h + 16);  // 어둑
+    ctx.fillStyle = '#88cc88'; ctx.fillText('CLEAR', mx, d.y - 20);
+  } else {
+    ctx.fillStyle = isSword ? '#88bbff' : '#ff5050';
+    ctx.fillText(isSword ? 'SWORD' : 'BOSS', mx, d.y - 20);
   }
+  ctx.textAlign = 'left';
 }
 
-function getDoorLabel(door) {
-  if (door.roomType === 'boss') return 'BOSS';
-  switch (door.shopType) {
-    case SHOP_TYPE.STARTER_GIFT: return 'GIFT';
-    case SHOP_TYPE.SHIELD: return 'SHIELD';
-    case SHOP_TYPE.ARMOR: return 'ARMOR';
-    case SHOP_TYPE.BOOTS: return 'BOOTS';
-    case SHOP_TYPE.WEAPON: return 'WEAPON';
-    default: return 'SHOP';
-  }
+// 숨은 문 힌트: 벽/지면에 아주 옅게 깜빡이는 반짝임. 위치를 어렴풋이 암시하되 노골적이지 않게.
+function _drawHiddenHint(ctx, sx, d) {
+  const t = Date.now() / 260 + sx * 0.05;
+  const a = 0.10 + 0.09 * Math.sin(t);
+  const cx = Math.round(sx + d.w / 2), cy = Math.round(d.y + d.h * 0.55);
+  ctx.fillStyle = `rgba(255,255,190,${a})`;
+  ctx.fillRect(cx - 1, cy - 1, 2, 2);
+  ctx.fillStyle = `rgba(255,255,190,${a * 0.7})`;
+  ctx.fillRect(cx - 7, cy + 3, 1, 1);
+  ctx.fillRect(cx + 6, cy - 4, 1, 1);
+  ctx.fillRect(cx + 2, cy + 6, 1, 1);
 }
 
-function getDoorIcon(door, assets) {
-  switch (door.shopType) {
-    case SHOP_TYPE.STARTER_GIFT: return assets?.items?.sword;
-    case SHOP_TYPE.SHIELD: return assets?.items?.shield;
-    case SHOP_TYPE.ARMOR: return assets?.items?.armor;
-    case SHOP_TYPE.BOOTS: return assets?.items?.boots;
-    case SHOP_TYPE.WEAPON: return assets?.items?.swordBroad;
-    default: return assets?.items?.shield || assets?.items?.swordBroad;
-  }
-}
-
-function drawInteriorDoor(ctx, door, color) {
-  ctx.fillStyle = color;
-  ctx.fillRect(door.x, door.y, door.w, door.h);
-  ctx.fillStyle = '#130d0d';
-  ctx.fillRect(door.x + 6, door.y + 10, door.w - 12, door.h - 10);
-  ctx.fillStyle = '#d7b46a';
-  ctx.fillRect(door.x + door.w - 10, door.y + 27, 4, 4);
+function _torch(ctx, x, y) {
+  ctx.fillStyle = '#5a3a18'; ctx.fillRect(x, y, 4, 20);          // 받침
+  ctx.fillStyle = '#ff9020'; ctx.fillRect(x - 3, y - 8, 10, 10); // 불꽃
+  ctx.fillStyle = '#ffd060'; ctx.fillRect(x - 1, y - 5, 6, 6);
+  ctx.fillStyle = 'rgba(255,180,60,0.18)'; ctx.fillRect(x - 16, y - 16, 36, 40); // 빛무리
 }

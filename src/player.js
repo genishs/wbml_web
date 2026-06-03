@@ -1,289 +1,237 @@
-import { GRAVITY, JUMP_FORCE, PLAYER_SPEED } from './constants.js';
-import { assets, getPlayerStageSprite, getPlayerAppearanceStage } from './assets.js';
-import { getEquipmentAppearanceKeys, getShopItem } from './equipment.js';
+import { GRAVITY, JUMP_FORCE, PLAYER_SPEED, HUD_W, GROUND_Y } from './constants.js';
+import { SWORD, SHIELD, ARMOR, BOOTS, MAGIC } from './equipment.js';
+import { drawWonderBoy } from './sprites.js';
+import { audio } from './audio.js';
+
+const ATTACK_FRAMES    = 30;   // 한 번 찌르기 ≈0.5초(60fps). 이 시간 동안 입력 잠김(원작 감각)
+const KNOCKBACK_FRAMES = 28;
+const BUFF_DURATION    = 900;  // 시간제 강화아이템 지속(프레임, ≈15초)
+const PLAYER_SCALE     = 0.7;  // 스프라이트/충돌박스 동시 축소(몹과 크기 균형)
+const SPAWN_Y          = GROUND_Y - 50;  // 발이 지면에 닿는 시작 y (h=50)
+
+// ⚠ 테스트용: 공격 판정 확대. 정식 빌드 전 1.0 / 기본값으로 되돌릴 것
+const TEST_REACH_MULT = 2.6;   // 리치 배수
+const TEST_HIT_H      = 40;    // 판정 세로 높이 (축소된 몸에 맞춤)
+const TEST_HIT_YOFF   = 8;     // 판정 시작 y(플레이어 상단 기준)
 
 export class Player {
   constructor(x, y) {
-    this.x = x;
-    this.y = y;
-    this.w = 24;
-    this.h = 28;
-    this.vx = 0;
-    this.vy = 0;
+    this.x = x; this.y = y;
+    this.w = 20; this.h = 50;   // 스프라이트 0.7배 축소(몹과 균형). 원본 28×72 → 20×50
+    this.vx = 0; this.vy = 0;
     this.onGround = false;
-    this.facing = 1; // 1=right, -1=left
-    this.knockbackX = 0;
-    this.knockbackY = 0;
-    this.attacking = false;
-    this.attackTimer = 0;
-    this.attackCooldown = 0;
-    this.invincible = 0;
+    this.facing = 1;
 
-    // Stats
-    this.maxHp = 10;
-    this.hp = 10;
-    this.gold = 0;
-    this.attack = 0;
-    this.defense = 0;
-    this.baseMaxHp = 10;
-    this.speedMultiplier = 1;
-    this.attackRangeBonus = 0;
-    this.equipment = {
-      sword: null,
-      shield: null,
-      armor: null,
-      boots: null,
+    this.state = 'idle';
+    this.stateTimer = 0;
+    this.animFrame  = 0;
+    this.animTick   = 0;
+
+    this.hp = 5; this.maxHp = 5;   // 아케이드: 시작 5, 점수로 최대 10까지 확장
+    this.score = 0;
+    this.gold  = 9999;             // TODO: 정식 빌드에선 0 (골드는 적·보물에서 획득). 현재 테스트 편의값
+    this.timer = 3600; this.timerMax = 3600;
+
+    // 점수 마일스톤마다 최대 하트 +1 (최대 10). 임계값: 30k 후 +50k 간격 (원판 추정치)
+    this.heartThresholds = [30000, 80000, 130000, 180000, 230000];
+    this._nextHeartIdx   = 0;
+
+    this.eq = {
+      sword:  SWORD.none,
+      shield: SHIELD.none,
+      armor:  ARMOR.none,
+      boots:  BOOTS.none,
     };
+    this.invincible = 0;
+    this.attackHit  = false;
 
-    // Animation
-    this.frame = 0;
-    this.frameTimer = 0;
+    // 서브웨폰 스택(LIFO): [{magic, count}], 마지막 항목이 현재 활성
+    this.magicStack = [];
+    // 디버그: 테스트용 매직 시드 (정식 빌드에선 제거)
+    this.addMagic(MAGIC.bomb, 5);
+    this.addMagic(MAGIC.fireball, 5);
+    this.addMagic(MAGIC.tornado, 3);
+    this.addMagic(MAGIC.thunder, 2);
+
+    // 소지품(특수 아이템) — HUD 6슬롯에 표시
+    //  helmet 투구 / gauntlet 건틀릿 / wingboots 날개신발 : 일시 강화(획득 후 시간제)
+    //  key 열쇠(보스 드롭) / potion 물약(hp 0시 자동, +5) / story 스토리아이템
+    this.inventory = { helmet: 0, gauntlet: 0, wingboots: 0, key: 0, potion: 0, story: null };
+    // 시간제 강화 잔여 프레임. 활성 동안 inventory 플래그=1로 HUD에 표시
+    this.buffs = { helmet: 0, gauntlet: 0, wingboots: 0 };
+    this.hospitalVisits = 0;   // 병원 누진 비용용(이용할수록 상승)
   }
 
-  update(input, platforms) {
-    // Movement
-    const speed = PLAYER_SPEED * this.speedMultiplier;
-    if (input.isDown('ArrowLeft')) {
-      this.vx = -speed;
-      this.facing = -1;
-    } else if (input.isDown('ArrowRight')) {
-      this.vx = speed;
-      this.facing = 1;
-    } else {
-      this.vx *= 0.8;
-    }
-
-    // Jump
-    if ((input.wasPressed('KeyZ') || input.wasPressed('Space')) && this.onGround) {
-      this.vy = JUMP_FORCE;
-      this.onGround = false;
-    }
-
-    // Attack
-    if (input.wasPressed('KeyX') && this.attackCooldown <= 0 && this.hasSword) {
-      this.attacking = true;
-      this.attackTimer = 18;
-      this.attackCooldown = 25;
-    }
-    if (this.attackTimer > 0) this.attackTimer--;
-    else this.attacking = false;
-    if (this.attackCooldown > 0) this.attackCooldown--;
-
-    // Gravity
-    this.vy += GRAVITY;
-    if (this.invincible > 0) {
-      this.knockbackY += GRAVITY * 0.25;
-    }
-    this.x += this.vx + this.knockbackX;
-    this.y += this.vy + this.knockbackY;
-
-    // Platform collision
-    this.onGround = false;
-    for (const p of platforms) {
-      if (this._collides(p)) {
-        // from above
-        if (this.vy + this.knockbackY >= 0 && this.y + this.h - (this.vy + this.knockbackY) <= p.y + 2) {
-          this.y = p.y - this.h;
-          this.vy = 0;
-          this.knockbackY = 0;
-          this.onGround = true;
-        } else if (this.vy + this.knockbackY < 0 && this.y - (this.vy + this.knockbackY) >= p.y + p.h - 2) {
-          this.y = p.y + p.h;
-          this.vy = 0;
-          this.knockbackY = 0;
-        } else if (this.vx + this.knockbackX > 0) {
-          this.x = p.x - this.w;
-          this.vx = 0;
-          this.knockbackX = 0;
-        } else if (this.vx + this.knockbackX < 0) {
-          this.x = p.x + p.w;
-          this.vx = 0;
-          this.knockbackX = 0;
-        }
-      }
-    }
-
-    if (this.invincible > 0) {
-      this.invincible--;
-      this.knockbackX *= 0.78;
-      this.knockbackY *= 0.84;
-      if (Math.abs(this.knockbackX) < 0.05) this.knockbackX = 0;
-      if (Math.abs(this.knockbackY) < 0.05) this.knockbackY = 0;
-    }
-
-    // Animation frame cycling
-    this.frameTimer++;
-    const isMoving = Math.abs(this.vx) > 0.5;
-    const frameTick = isMoving ? 7 : 12;
-    if (this.frameTimer > frameTick) {
-      this.frameTimer = 0;
-      this.frame = (this.frame + 1) % 2;
-    }
+  // 강화아이템 획득 → 버프 발동(지속시간 리필) + 소지품 슬롯 점등
+  gainBuff(key) {
+    if (!(key in this.buffs)) return;
+    this.buffs[key] = BUFF_DURATION;
+    this.inventory[key] = 1;
   }
 
-  _collides(r) {
-    return this.x < r.x + r.w && this.x + this.w > r.x &&
-           this.y < r.y + r.h && this.y + this.h > r.y;
+  // 현재 검 공격력 (건틀릿 버프 시 +2). 폭탄 외 매직/검 데미지의 기준값
+  swordAtk() {
+    let a = this.eq.sword?.atk ?? 0;
+    if (this.buffs.gauntlet > 0) a += 2;
+    return a;
+  }
+
+  // 같은 종류면 누적, 다른 종류면 새 레이어를 위에 쌓음(최근=활성)
+  addMagic(magic, n = 1) {
+    const top = this.magicStack[this.magicStack.length - 1];
+    if (top && top.magic.id === magic.id) top.count += n;
+    else this.magicStack.push({ magic, count: n });
+  }
+
+  // 활성(최근) 1개 소비. 없으면 null
+  useMagic() {
+    const top = this.magicStack[this.magicStack.length - 1];
+    if (!top) return null;
+    top.count--;
+    const m = top.magic;
+    if (top.count <= 0) this.magicStack.pop();
+    return m;
+  }
+
+  activeMagic() { return this.magicStack[this.magicStack.length - 1] || null; }
+
+  // 갑옷 agi(음수)는 이동/점프를 깎는 민첩성 너프
+  get speed()     { return Math.max(0.8, PLAYER_SPEED + (this.eq.boots?.speed ?? 0) + (this.eq.armor?.agi ?? 0) + (this.buffs.wingboots > 0 ? 0.6 : 0)); }
+  get jumpForce() { return JUMP_FORCE - (this.eq.boots?.jump ?? 0) * 0.25 - (this.eq.armor?.agi ?? 0) - (this.buffs.wingboots > 0 ? 3 : 0); }
+
+  // 찌르기 진행 단계 0~3 (0:윈드업 1:내지름 2:최대 3:회수)
+  // 무게감을 위해 윈드업과 최대 찌르기 구간을 길게 둔다(균등분할 X).
+  attackPhase() {
+    const e = (ATTACK_FRAMES - this.stateTimer) / ATTACK_FRAMES;  // 0~1 진행
+    if (e < 0.24) return 0;   // 윈드업(뒤로 당김)
+    if (e < 0.42) return 1;   // 내지름
+    if (e < 0.80) return 2;   // 최대 찌르기(길게 유지)
+    return 3;                 // 회수
   }
 
   getAttackBox() {
-    if (!this.attacking || !this.hasSword) return null;
-    const range = 20 + this.attackRangeBonus;
-    return {
-      x: this.facing > 0 ? this.x + this.w : this.x - range,
-      y: this.y + 4,
-      w: range,
-      h: 16,
-    };
+    if (this.state !== 'attack') return null;
+    const ph = this.attackPhase();
+    if (ph < 1 || ph > 2) return null;          // 검이 뻗는 1~2단계에만 판정
+    const ext   = ph === 2 ? 1 : 0.6;
+    const reach = (this.eq.sword?.reach ?? 0) * ext * TEST_REACH_MULT;
+    if (!reach) return null;
+    const x = this.facing === 1 ? this.x + this.w : this.x - reach;
+    return { x, y: this.y + TEST_HIT_YOFF, w: reach, h: TEST_HIT_H };
   }
 
-  takeDamage(amount, knockbackDir = 0) {
-    if (this.invincible > 0) return;
-    const dmg = Math.max(1, amount - this.defense);
-    this.hp -= dmg;
-    this.invincible = 90;
-    this.knockbackX = knockbackDir * 6.2;
-    this.knockbackY = -3.6;
-    if (this.hp < 0) this.hp = 0;
-  }
+  equip(slot, item) { this.eq[slot] = item; }
 
-  equip(itemId) {
-    const item = getShopItem(itemId);
-    if (!item) return;
-    if (item.slot) {
-      this.equipment[item.slot] = item.id;
-      this.recalculateStats();
-      return;
+  // 보스 드롭으로 검 업그레이드 (상점 구매 불가). 더 강한 검일 때만 장착.
+  awardSword(item) {
+    if (item && item.atk > (this.eq.sword?.atk ?? 0)) {
+      this.eq.sword = item;
+      return true;
     }
-    if (item.id === 'potion') {
-      this.hp = this.maxHp;
-    }
+    return false;
   }
 
-  recalculateStats() {
-    this.attack = 0;
-    this.defense = 0;
-    this.maxHp = this.baseMaxHp;
-    this.speedMultiplier = 1;
-    this.attackRangeBonus = 0;
+  // source: 'contact'(직접 접촉 → 갑옷 경감) | 'projectile'(적 투사체 → 방패 경감/차단)
+  takeDamage(dmg, source = 'contact') {
+    if (this.invincible > 0) return false;
+    let reduce;
+    if (source === 'projectile') {
+      // 방패로 막으면 완전 차단, 못 막아도 방패 급수(def)만큼 경감
+      if (Math.random() < (this.eq.shield?.block ?? 0)) { this.invincible = 60; return false; }
+      reduce = (this.eq.shield?.def ?? 0) / 100;
+    } else {
+      reduce = (this.eq.armor?.def ?? 0) / 100;   // 접촉 데미지는 갑옷이 경감
+      if (this.buffs.helmet > 0) reduce = Math.min(0.85, reduce + 0.3);   // 투구 버프: 추가 경감
+    }
+    this.hp = Math.max(0, this.hp - Math.max(1, Math.round(dmg * (1 - reduce))));
+    this.invincible = 60;
+    return true;
+  }
 
-    Object.values(this.equipment).forEach(itemId => {
-      const item = getShopItem(itemId);
-      if (!item) return;
-      this.attack += item.bonuses.attack || 0;
-      if (item.slot === 'armor') {
-        this.defense += item.bonuses.defense || 0;
+  knockback(sourceX) {
+    const dir = this.x > sourceX ? 1 : -1;
+    const r   = 1 - (this.eq.shield?.kbResist ?? 0);   // 방패 넉백 저항
+    this.state = 'knockback'; this.stateTimer = KNOCKBACK_FRAMES;
+    this.vx = dir * 4.5 * r; this.vy = -3.5 * Math.max(0.5, r);
+  }
+
+  update(input, platforms) {
+    // 아케이드 타이머: 모래가 다 떨어지면 즉사가 아니라 하트 1칸 감소 후 리셋(뒤집힘)
+    if (--this.timer <= 0) {
+      this.hp = Math.max(0, this.hp - 1);
+      this.timer = this.timerMax;
+    }
+    // 점수로 최대 하트 확장 (5→10). 확장된 칸은 채워서 보상
+    while (this._nextHeartIdx < this.heartThresholds.length &&
+           this.maxHp < 10 &&
+           this.score >= this.heartThresholds[this._nextHeartIdx]) {
+      this.maxHp++; this.hp++; this._nextHeartIdx++;
+    }
+    if (this.invincible > 0) this.invincible--;
+    // 시간제 강화 만료 처리
+    for (const k in this.buffs) {
+      if (this.buffs[k] > 0 && --this.buffs[k] <= 0) this.inventory[k] = 0;
+    }
+    this.animTick++;
+
+    if (this.state === 'knockback') {
+      if (--this.stateTimer <= 0) { this.state = 'idle'; this.vx = 0; }
+    } else if (this.state === 'attack') {
+      if (--this.stateTimer <= 0) { this.state = 'idle'; this.attackHit = false; }
+    } else {
+      this._handleInput(input);
+    }
+
+    this.vy += GRAVITY;
+    this.x  += this.vx;
+    this.y  += this.vy;
+    if (this.state !== 'knockback') this.vx *= (this.eq.boots?.friction ?? 0.80); // 부츠 접지력(천=미끄럼)
+    this._collide(platforms);
+
+    if (this.state === 'walk') {
+      if (this.animTick % 10 === 0) this.animFrame = (this.animFrame + 1) % 2;
+    } else { this.animFrame = 0; }
+  }
+
+  _handleInput(input) {
+    const atk   = input.wasPressed('KeyZ') || input.wasPressed('Space');
+    const jmp   = input.wasPressed('ArrowUp') || input.wasPressed('KeyX');
+    const left  = input.isDown('ArrowLeft');
+    const right = input.isDown('ArrowRight');
+
+    if (atk && this.eq.sword.id !== 'none') {
+      this.state = 'attack'; this.stateTimer = ATTACK_FRAMES; this.attackHit = false;
+      audio.sfx('swing'); return;
+    }
+    if (left)       { this.vx = -this.speed; this.facing = -1; }
+    else if (right) { this.vx =  this.speed; this.facing =  1; }
+    else            { this.vx = 0; }
+
+    if (this.onGround) this.state = (left || right) ? 'walk' : 'idle';
+    if (jmp && this.onGround) { this.vy = this.jumpForce; this.onGround = false; this.state = 'jump'; audio.sfx('jump'); }
+  }
+
+  _collide(platforms) {
+    this.onGround = false;
+    for (const p of platforms) {
+      if (this.x + this.w <= p.x || this.x >= p.x + p.w) continue;
+      if (this.vy >= 0 && this.y + this.h > p.y && this.y + this.h < p.y + 20) {
+        this.y = p.y - this.h; this.vy = 0; this.onGround = true;
+        if (this.state === 'jump') this.state = 'idle';
       }
-      this.maxHp += item.bonuses.maxHp || 0;
-      this.speedMultiplier = Math.max(this.speedMultiplier, item.bonuses.speedMultiplier || 1);
-      this.attackRangeBonus += item.bonuses.range || 0;
-    });
-
-    this.hp = Math.min(this.hp, this.maxHp);
-  }
-
-  hasEquipment(slot) {
-    return !!this.equipment[slot];
-  }
-
-  get hasSword() { return this.hasEquipment('sword'); }
-  get hasShield() { return this.hasEquipment('shield'); }
-  get hasArmor() { return this.hasEquipment('armor'); }
-  get hasBoots() { return this.hasEquipment('boots'); }
-
-  _getAnimFrame() {
-    const stageIdx = Math.min(
-      (assets.playerFrames?.length ?? 1) - 1,
-      Math.max(0, this._appearanceStage ?? 0)
-    );
-    const frameSet = assets.playerFrames?.[stageIdx];
-    if (!frameSet) return getPlayerStageSprite(this); // fallback
-
-    if (this.attacking) {
-      // atk1 → atk2 를 attackTimer 기준으로 전환
-      return this.attackTimer > 9 ? frameSet.atk1 : frameSet.atk2;
     }
-
-    const isMoving = Math.abs(this.vx) > 0.5;
-    if (!isMoving || !this.onGround) return frameSet.idle;
-    return this.frame === 0 ? frameSet.walk1 : frameSet.walk2;
+    if (this.x < 0) { this.x = 0; this.vx = 0; }
   }
 
-  draw(ctx, camX, sprites) {
-    const px = this.x - camX;
-    const py = this.y;
-
-    if (this.invincible > 0 && Math.floor(this.invincible / 6) % 2 === 0) return;
-
-    this._appearanceStage = getPlayerAppearanceStage(this);
-
-    const frameImg = this._getAnimFrame();
-    const appearance = getEquipmentAppearanceKeys(this);
-
+  draw(ctx, camX) {
+    if (this.invincible > 0 && Math.floor(this.invincible / 4) % 2 === 1) return;
     ctx.save();
-    ctx.imageSmoothingEnabled = false;
-
-    if (this.facing < 0) {
-      ctx.translate(px + this.w, py);
-      ctx.scale(-1, 1);
-    } else {
-      ctx.translate(px, py);
-    }
-
-    const isMoving = Math.abs(this.vx) > 0.5;
-    let bobY = 0;
-    if (isMoving && this.onGround && !this.attacking && this.frame === 1) {
-      bobY = 1;
-    }
-    
-    ctx.translate(0, bobY);
-
-    if (frameImg) {
-      ctx.drawImage(frameImg, 0, 0, this.w, this.h);
-    } else {
-      ctx.fillStyle = '#f0c040';
-      ctx.fillRect(0, 0, this.w, this.h);
-    }
-
-    this.drawEquipment(ctx, appearance, sprites);
-
+    ctx.translate(Math.round(this.x - camX + HUD_W), Math.round(this.y));
+    ctx.scale(PLAYER_SCALE, PLAYER_SCALE);
+    drawWonderBoy(ctx, {
+      facing: this.facing, state: this.state, animFrame: this.animFrame, eq: this.eq,
+      attackPhase: this.state === 'attack' ? this.attackPhase() : 0,
+    });
     ctx.restore();
-  }
-
-  drawEquipment(ctx, appearance, sprites) {
-    const armorImg = appearance.armor ? assets.items[appearance.armor] : null;
-    if (armorImg) {
-      ctx.drawImage(armorImg, 5, 6, 14, 14);
-    }
-
-    const bootsImg = appearance.boots ? assets.items[appearance.boots] : null;
-    if (bootsImg) {
-      ctx.drawImage(bootsImg, 6, 18, 12, 8);
-    }
-
-    const shieldImg = appearance.shield ? assets.items[appearance.shield] : null;
-    if (shieldImg) {
-      ctx.drawImage(shieldImg, -7, 5, 11, 14);
-    }
-
-    let swordImg = null;
-    if (appearance.sword && sprites && sprites.weapons && sprites.weapons[appearance.sword]) {
-        swordImg = sprites.weapons[appearance.sword];
-    } else if (appearance.sword) {
-        swordImg = assets.items[appearance.sword];
-    }
-
-    if (swordImg) {
-      ctx.save();
-      if (this.attacking) {
-        ctx.translate(14, 12);
-        ctx.drawImage(swordImg, 0, -4, 18, 8);
-      } else {
-        ctx.translate(10, 10);
-        ctx.rotate(-Math.PI / 2.2);
-        ctx.drawImage(swordImg, 0, -4, 18, 8);
-      }
-      ctx.restore();
-    }
   }
 }

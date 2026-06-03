@@ -1,108 +1,92 @@
 import { getPlayerAppearanceStage } from './equipment.js';
 
-const REF  = '../assets/reference_art';
-const SPR  = '../assets/sprites';
+const REF = '../assets/reference_art';
 
-// reference_art: hero stages + equipment icons
-const refFiles = {
-  playerStages: [
-    'hero-stage-0.png',
-    'hero-stage-1.png',
-    'hero-stage-2.png',
-    'hero-stage-3.png',
-    'hero-stage-4.png',
-    'hero-stage-5.png',
-  ],
-  // walk / attack frames per stage: [idle, walk1, walk2, atk1, atk2]
-  playerFrames: Array.from({ length: 6 }, (_, i) => ({
-    idle:  `hero-stage-${i}.png`,
-    walk1: `hero-stage-${i}-walk1.png`,
-    walk2: `hero-stage-${i}-walk2.png`,
-    atk1:  `hero-stage-${i}-atk1.png`,
-    atk2:  `hero-stage-${i}-atk2.png`,
-  })),
-  items: {
-    sword:         'sword.png',
-    swordBroad:    'sword-broad.png',
-    swordGradius:  'sword-gradius.png',
-    swordGreat:    'sword-great.png',
-    swordExcalibur:'sword-excalibur.png',
-    swordLegend:   'sword-legend.png',
-    shield:        'shield.png',
-    armor:         'armor.png',
-    boots:         'boots.png',
-  },
-};
-
-// sprites/: enemy images (type → filename)
-const sprFiles = {
-  snake:         'snake.png',
-  goblin:        'goblin.png',
-  orc:           'orc.png',
-  knight:        'blue_knight.png',
-  redKnight:     'red_knight.png',
-  blueKnight:    'blue_knight.png',
-  silverKnight:  'silver_knight.png',
-  death:         'death_master.png',
-  dragon:        'dragon.png',
-  mechDragon:    'mech_dragon.png',
-  vampireLord:   'vampire_lord.png',
-  wereRat:       'were_rat.png',
-  yetti:         'yeti.png',
-  snowYetti:     'yeti.png',
-  giantKong:     'giant_kong.png',
-  goldCollector: 'gold_collector.png',
-};
+const REF_FILES = [
+  'hero-stage-0', 'hero-stage-1', 'hero-stage-2',
+  'hero-stage-3', 'hero-stage-4', 'hero-stage-5',
+  'hero-stage-0-walk1', 'hero-stage-0-walk2',
+  'hero-stage-1-walk1', 'hero-stage-1-walk2',
+  'hero-stage-2-walk1', 'hero-stage-2-walk2',
+  'hero-stage-3-walk1', 'hero-stage-3-walk2',
+  'hero-stage-4-walk1', 'hero-stage-4-walk2',
+  'hero-stage-5-walk1', 'hero-stage-5-walk2',
+  'hero-stage-0-atk1', 'hero-stage-0-atk2',
+  'hero-stage-1-atk1', 'hero-stage-1-atk2',
+  'hero-stage-2-atk1', 'hero-stage-2-atk2',
+  'hero-stage-3-atk1', 'hero-stage-3-atk2',
+  'hero-stage-4-atk1', 'hero-stage-4-atk2',
+  'hero-stage-5-atk1', 'hero-stage-5-atk2',
+  'goblin', 'knight', 'dragon',
+  'armor', 'boots', 'shield',
+  'sword', 'sword-gradius', 'sword-broad',
+  'sword-great', 'sword-excalibur', 'sword-legend',
+];
 
 function loadImage(src) {
   return new Promise(resolve => {
     const img = new Image();
-    img.onload = () => resolve(img);
+    img.onload  = () => resolve(img);
     img.onerror = () => resolve(null);
     img.src = src;
   });
 }
 
-function ref(name)  { return new URL(`${REF}/${encodeURIComponent(name)}`, import.meta.url).href; }
-function spr(name)  { return new URL(`${SPR}/${encodeURIComponent(name)}`, import.meta.url).href; }
-
 export const assets = {
   ready: false,
+  imgs: {},
   items: {},
   enemies: {},
   playerStages: [],
-  playerFrames: [],  // [stage][frameName] = HTMLImageElement
+  playerFrames: [],
 };
 
 export async function loadAssets() {
-  const itemEntries = await Promise.all(
-    Object.entries(refFiles.items).map(async ([k, f]) => [k, await loadImage(ref(f))])
-  );
-  assets.items = Object.fromEntries(itemEntries);
-
-  const enemyEntries = await Promise.all(
-    Object.entries(sprFiles).map(async ([k, f]) => [k, await loadImage(spr(f))])
-  );
-  assets.enemies = Object.fromEntries(enemyEntries);
-
-  assets.playerStages = await Promise.all(refFiles.playerStages.map(f => loadImage(ref(f))));
-
-  assets.playerFrames = await Promise.all(
-    refFiles.playerFrames.map(async frameSet => {
-      const entries = await Promise.all(
-        Object.entries(frameSet).map(async ([k, f]) => [k, await loadImage(ref(f))])
-      );
-      return Object.fromEntries(entries);
+  const results = await Promise.all(
+    REF_FILES.map(key => {
+      const url = new URL(`${REF}/${key}.png`, import.meta.url).href;
+      return loadImage(url).then(img => [key, img]);
     })
   );
+
+  for (const [key, img] of results) {
+    if (img) assets.imgs[key] = img;
+  }
+
+  // Equipment icon shortcuts
+  const itemMap = {
+    sword: 'sword', swordBroad: 'sword-broad', swordGradius: 'sword-gradius',
+    swordGreat: 'sword-great', swordExcalibur: 'sword-excalibur', swordLegend: 'sword-legend',
+    shield: 'shield', armor: 'armor', boots: 'boots',
+  };
+  for (const [k, v] of Object.entries(itemMap)) {
+    if (assets.imgs[v]) assets.items[k] = assets.imgs[v];
+  }
+
+  // Enemy shortcuts
+  for (const t of ['goblin', 'knight', 'dragon']) {
+    if (assets.imgs[t]) assets.enemies[t] = assets.imgs[t];
+  }
+
+  // Player stage frames
+  for (let i = 0; i < 6; i++) {
+    assets.playerStages[i] = assets.imgs[`hero-stage-${i}`] || null;
+    assets.playerFrames[i] = {
+      idle:  assets.imgs[`hero-stage-${i}`]       || null,
+      walk1: assets.imgs[`hero-stage-${i}-walk1`] || null,
+      walk2: assets.imgs[`hero-stage-${i}-walk2`] || null,
+      atk1:  assets.imgs[`hero-stage-${i}-atk1`] || null,
+      atk2:  assets.imgs[`hero-stage-${i}-atk2`] || null,
+    };
+  }
 
   assets.ready = true;
   return assets;
 }
 
 export function getPlayerStageSprite(player) {
-  const stageIndex = Math.min(assets.playerStages.length - 1, getPlayerAppearanceStage(player));
-  return assets.playerStages[stageIndex] || null;
+  const n = Math.min(5, getPlayerAppearanceStage(player));
+  return assets.playerStages[n] || null;
 }
 
 export { getPlayerAppearanceStage };

@@ -1,0 +1,66 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "You are the Sprite Agent for the Wonder Boy in Monster Land clone.\n\nAn Edit/Write just occurred. Check stdin JSON for .tool_input.file_path.\nOnly act if the path contains 'sprites.js'. If not, exit silently (output nothing).\n\nIf sprites.js was changed:\n- Verify all r(ctx, x, y, w, h, col) calls use coordinates within the native 16×26 grid.\n- Check that _drawIdle (3/4 view) and _drawSide (side profile) don't share pixel logic in ways that cause visual glitches.\n- Confirm the S=3 scale factor is never hardcoded as a literal 3 in new code — always use the exported S constant.\n- Check palette: skin=#f4a060, hair=#f0c800, eye=#181818. Alert if a new color was introduced that breaks the palette.\n- If _swordThrust or _swordUpright changed, verify blen is computed from sword.reach, not hardcoded.\nReport findings as 3 bullet points max. If no issues, say 'Sprite Agent: OK'.",
+            "timeout": 45
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "You are the Combat Agent for the Wonder Boy in Monster Land clone.\n\nAn Edit/Write just occurred. Check stdin JSON for .tool_input.file_path.\nOnly act if the path contains 'player.js' OR 'enemy.js'. If not, exit silently.\n\nIf player.js or enemy.js was changed:\n- Player starts at y = GROUND_Y - 72 = 228. Ground enemies sit at GROUND_Y - enemyH ≈ 265–290.\n- getAttackBox() must have y: this.y + 45, h: 28 (NOT y+12) to reach ground-level enemies.\n- ATTACK_FRAMES=22; hitbox should be active when stateTimer < ATTACK_FRAMES/2 (first 11 frames = wind-up, last 11 = active).\n- Check that knockback (vx=±4.5, vy=-3.5) and invincible=60 frames are set together in takeDamage.\n- Enemy getHitbox() must return coordinates relative to world space (e + e.x, not viewport).\n- Verify no enemy type has atk=0 (would make damage immune).\nReport findings as 3 bullet points max. If no issues, say 'Combat Agent: OK'.",
+            "timeout": 45
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "You are the Stage Agent for the Wonder Boy in Monster Land clone.\n\nAn Edit/Write just occurred. Check stdin JSON for .tool_input.file_path.\nOnly act if the path contains 'stage.js'. If not, exit silently.\n\nIf stage.js was changed:\n- Each stage must have a groundLen > VIEW_W (528) so the camera can scroll.\n- Shop doors should come in 4 types: WPN, SHD, ARM, BTS in roughly that order per stage.\n- Platforms (non-ground) must have y < GROUND_Y (300) and x+w within groundLen.\n- Enemy spawns: early stages should have blob/snake only; bat appears mid-game; knight reserved for later stages.\n- Verify no two doors are closer than 100px (player needs time to pass without accidental entry).\n- Check that buildStage(n) handles stages 1–5 without throwing.\nReport findings as 3 bullet points max. If no issues, say 'Stage Agent: OK'.",
+            "timeout": 45
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "You are the UI Agent for the Wonder Boy in Monster Land clone.\n\nAn Edit/Write just occurred. Check stdin JSON for .tool_input.file_path.\nOnly act if the path contains 'ui.js' OR 'shop.js'. If not, exit silently.\n\nIf ui.js or shop.js was changed:\n- HUD must fit within 112px width (HUD_W). No text or icon should render at x > 110.\n- All canvas text should use a pixel-art monospace font (e.g. '9px monospace' or '10px monospace'). No proportional fonts.\n- Hearts in LIFE display: filled=#e81020, empty=#600000. Must show maxHp slots, filled up to current hp.\n- Equipment grid: 2×2 layout showing sword/shield top row, armor/boots bottom row with colored icons.\n- Shop overlay must not leak outside CANVAS bounds (640×360). Background dim alpha should be 0.75–0.85.\n- Shop navigation: ↑↓ selects, Z buys, X/Escape closes. Verify input.wasPressed is used (not isDown) for menu actions.\nReport findings as 3 bullet points max. If no issues, say 'UI Agent: OK'.",
+            "timeout": 45
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "You are the Equipment Agent for the Wonder Boy in Monster Land clone.\n\nAn Edit/Write just occurred. Check stdin JSON for .tool_input.file_path.\nOnly act if the path contains 'equipment.js'. If not, exit silently.\n\nIf equipment.js was changed:\n- Sword stat progression must be: gradius atk=2 reach=14, broad atk=4 reach=18, great atk=6 reach=22, excalibur atk=9 reach=26, legend atk=14 reach=30.\n- Every sword except 'none' must have bladeColor, guardColor, and price defined.\n- Shield/armor/boots must form a clear upgrade path: none < tier1 < tier2 < tier3 < legend.\n- getShopItems(type, player) must gate higher-tier items behind current equipment level — player shouldn't see excalibur if they have 'none' sword.\n- Armor with id 'knight' must use bodyColor '#d8b840' (gold), 'hard' must use '#5870a0' (blue-gray), 'legend' must use '#e8e8e0' (white).\n- Legend boots must have color '#e03020' (red).\nReport findings as 3 bullet points max. If no issues, say 'Equipment Agent: OK'.",
+            "timeout": 45
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "You are the QA Agent for the Wonder Boy in Monster Land clone.\n\nAn Edit/Write just occurred. Check stdin JSON for .tool_input.file_path.\nOnly act if the path contains 'game.js' OR 'constants.js' OR 'main.js'. If not, exit silently.\n\nIf game.js, constants.js, or main.js was changed:\n- Camera clamp: camX must stay in [0, groundLen - VIEW_W]. Verify Math.max(0, Math.min(target, groundLen - VIEW_W)).\n- _overlap(a,b) must use strict AABB: a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y.\n- Shop state: when shop.open is true, player movement must be fully suppressed (no _updatePlaying call).\n- GAME_STATE must cover: TITLE, PLAYING, SHOP, GAME_OVER, STAGE_CLEAR, PAUSE.\n- Game loop must use requestAnimationFrame, not setInterval.\n- Check that camX offset (HUD_W=112) is applied consistently in draw() before rendering player and doors.\nReport findings as 3 bullet points max. If no issues, say 'QA Agent: OK'.",
+            "timeout": 45
+          }
+        ]
+      }
+    ]
+  }
+}
