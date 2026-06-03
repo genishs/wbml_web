@@ -99,10 +99,14 @@ export class Player {
   get speed()     { return Math.max(0.8, PLAYER_SPEED + (this.eq.boots?.speed ?? 0) + (this.eq.armor?.agi ?? 0) + (this.buffs.wingboots > 0 ? 0.6 : 0)); }
   get jumpForce() { return JUMP_FORCE - (this.eq.boots?.jump ?? 0) * 0.25 - (this.eq.armor?.agi ?? 0) - (this.buffs.wingboots > 0 ? 3 : 0); }
 
-  // 찌르기 진행 단계 0~3 (0:준비 1:뻗기 2:최대 3:회수)
+  // 찌르기 진행 단계 0~3 (0:윈드업 1:내지름 2:최대 3:회수)
+  // 무게감을 위해 윈드업과 최대 찌르기 구간을 길게 둔다(균등분할 X).
   attackPhase() {
-    const elapsed = ATTACK_FRAMES - this.stateTimer;
-    return Math.max(0, Math.min(3, Math.floor(elapsed / (ATTACK_FRAMES / 4))));
+    const e = (ATTACK_FRAMES - this.stateTimer) / ATTACK_FRAMES;  // 0~1 진행
+    if (e < 0.24) return 0;   // 윈드업(뒤로 당김)
+    if (e < 0.42) return 1;   // 내지름
+    if (e < 0.80) return 2;   // 최대 찌르기(길게 유지)
+    return 3;                 // 회수
   }
 
   getAttackBox() {

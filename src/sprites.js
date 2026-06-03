@@ -84,7 +84,7 @@ export function drawWonderBoy(ctx, { facing, state, animFrame, eq, attackPhase =
   drawMatrix(ctx, HERO_UPPER, pal, SC);          // 상체(0~15행)
   drawLegs(ctx, state, animFrame, pal, SC);      // 다리(16~23행)
   drawShield(ctx, eq?.shield);                   // 방패: 앞손(진행방향)
-  drawSword(ctx, eq?.sword, state, attackPhase); // 검: 뒷손 → 앞으로 찌르기(맨 위)
+  drawSword(ctx, eq?.sword, state, attackPhase, pal); // 검: 뒷손 → 앞으로 찌르기(맨 위)
   ctx.restore();
 }
 
@@ -100,25 +100,50 @@ function drawLegs(ctx, state, animFrame, pal, sc) {
 }
 
 // 진짜 '검' 모양: 손잡이 + 크로스가드 + 날(하이라이트) + 뾰족한 끝.
-// 평상시엔 뒷손에 세워 들고, 공격 시 앞으로 4단계 찌르기.
-function drawSword(ctx, sword, state, phase) {
+// 평상시엔 뒷손에 세워 들고, 공격 시 크게 찌른다: 윈드업(뒤로 당김)→내지름→최대→회수.
+function drawSword(ctx, sword, state, phase, pal) {
   if (!sword || sword.id === 'none') return;
   const blade    = sword.bladeColor || '#d8d8e8';
   const guard    = sword.guardColor || '#c0a020';
   const reach    = sword.reach || 14;
-  const reachVis = 16 + reach;
+  const reachVis = 18 + reach;
+  const skin     = (pal && pal.s) || '#ffccbb';
+  const skinD    = (pal && pal.d) || '#cc9988';
 
   if (state === 'attack') {
-    // 4프레임 찌르기: 준비(당김) → 뻗기 → 최대 → 회수. 모두 수평 전방.
-    const y = 42;
-    let gripX, len;
-    switch (phase) {
-      case 0:  gripX = 12; len = reachVis * 0.30; break;
-      case 1:  gripX = 20; len = reachVis * 0.62; break;
-      case 2:  gripX = 26; len = reachVis * 1.00; break;
-      default: gripX = 22; len = reachVis * 0.55; break;
+    const y = 41;
+
+    if (phase === 0) {
+      // 윈드업: 검을 어깨 뒤로 세워 끌어당김(타격 직전의 '준비' 동작 → 무게감)
+      const gx = 3;
+      ctx.fillStyle = skin;  fr(ctx, gx + 1, y, 6, 3);                    // 당긴 앞손
+      ctx.fillStyle = guard; fr(ctx, gx, y - 3, 3, 9);                    // 크로스가드
+      ctx.fillStyle = blade; fr(ctx, gx - 1, y - 13, 3, 11);             // 세운 날
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; fr(ctx, gx - 1, y - 13, 1, 11);
+      return;
     }
-    _bladeH(ctx, gripX, y, len, blade, guard);
+
+    // 내지름/최대/회수: 수평 전방. 몸→손잡이로 뻗은 앞팔까지 그려 '닿는' 무게감.
+    let gripX, len, th;
+    switch (phase) {
+      case 1:  gripX = 23; len = reachVis * 0.72; th = 6; break;          // 내지름
+      case 2:  gripX = 32; len = reachVis * 1.18; th = 8; break;          // 최대(크고 굵게)
+      default: gripX = 25; len = reachVis * 0.58; th = 6; break;          // 회수
+    }
+    // 뻗은 앞팔(어깨 ~ 손잡이)
+    ctx.fillStyle = skinD; fr(ctx, 22, y + 1, gripX - 20, 4);
+    ctx.fillStyle = skin;  fr(ctx, 22, y, gripX - 20, 3);
+    _bladeH(ctx, gripX, y, len, blade, guard, th);
+
+    if (phase === 2) {
+      // 최대 찌르기 임팩트: 칼끝 섬광 + 흩날리는 스파크(타격감)
+      const tipX = gripX + 4 + len;
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      fr(ctx, tipX, y - 3, 2, th + 6);
+      ctx.fillStyle = 'rgba(255,240,170,0.8)';
+      fr(ctx, tipX + 3, y - 5, 2, 2); fr(ctx, tipX + 5, y + 1, 2, 2);
+      fr(ctx, tipX + 3, y + th + 1, 2, 2); fr(ctx, tipX + 7, y + 3, 2, 2);
+    }
   } else {
     // 평상시 — 뒷손(좌측)에 세워 듦
     const x = 7, yBot = 34, len = 14 + reach * 0.6;
@@ -134,18 +159,18 @@ function drawSword(ctx, sword, state, phase) {
   }
 }
 
-// 수평 전방 찌르기용 칼날 렌더
-function _bladeH(ctx, gripX, y, len, blade, guard) {
-  const th = 6;
-  ctx.fillStyle = '#6a3410'; fr(ctx, gripX - 7, y, 9, th - 2);        // 손잡이
-  ctx.fillStyle = '#3a1c08'; fr(ctx, gripX - 8, y, 3, th - 2);        // 폼멜
-  ctx.fillStyle = guard;     fr(ctx, gripX + 1, y - 4, 3, th + 6);    // 크로스가드
-  ctx.fillStyle = blade;     fr(ctx, gripX + 4, y, len, th - 2);      // 날
+// 수평 전방 찌르기용 칼날 렌더 (th = 검 두께; 최대 찌르기에서 더 굵게)
+function _bladeH(ctx, gripX, y, len, blade, guard, th = 6) {
+  const bt = th - 2;                                                 // 날 두께
+  ctx.fillStyle = '#6a3410'; fr(ctx, gripX - 7, y, 9, bt);           // 손잡이
+  ctx.fillStyle = '#3a1c08'; fr(ctx, gripX - 8, y, 3, bt);           // 폼멜
+  ctx.fillStyle = guard;     fr(ctx, gripX + 1, y - 4, 3, th + 6);   // 크로스가드
+  ctx.fillStyle = blade;     fr(ctx, gripX + 4, y, len, bt);         // 날
   ctx.fillStyle = 'rgba(255,255,255,0.75)'; fr(ctx, gripX + 4, y, len, 1);
-  ctx.fillStyle = blade;                                             // 칼끝
+  ctx.fillStyle = blade;                                            // 칼끝(삼각)
   ctx.beginPath();
-  ctx.moveTo(gripX + 4 + len, y); ctx.lineTo(gripX + 4 + len + 6, y + (th - 2) / 2);
-  ctx.lineTo(gripX + 4 + len, y + th - 2); ctx.closePath(); ctx.fill();
+  ctx.moveTo(gripX + 4 + len, y); ctx.lineTo(gripX + 4 + len + 7, y + bt / 2);
+  ctx.lineTo(gripX + 4 + len, y + bt); ctx.closePath(); ctx.fill();
 }
 
 function drawShield(ctx, shield) {
