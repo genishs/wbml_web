@@ -30,4 +30,6 @@ ctx.scale(dpr, dpr);
 loadAssets().finally(() => {
   const game = new Game(canvas, ctx);
   game.start();
+  // 자동화 테스트(Playwright) 훅 — 게임/플레이어 상태 점검용. 게임 로직엔 영향 없음.
+  window.__game = game;
 });

@@ -12,3 +12,6 @@ _t*.mjs
 doc/원더보이보스정보*
 doc/보스정보*
 doc/*.files/
+
+# Playwright 테스트 산출물(스크린샷)
+test/shots/

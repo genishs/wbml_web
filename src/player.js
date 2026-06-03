@@ -3,7 +3,7 @@ import { SWORD, SHIELD, ARMOR, BOOTS, MAGIC } from './equipment.js';
 import { drawWonderBoy } from './sprites.js';
 import { audio } from './audio.js';
 
-const ATTACK_FRAMES    = 16;   // 4프레임 × 4틱 찌르기
+const ATTACK_FRAMES    = 30;   // 한 번 찌르기 ≈0.5초(60fps). 이 시간 동안 입력 잠김(원작 감각)
 const KNOCKBACK_FRAMES = 28;
 const BUFF_DURATION    = 900;  // 시간제 강화아이템 지속(프레임, ≈15초)
 const PLAYER_SCALE     = 0.7;  // 스프라이트/충돌박스 동시 축소(몹과 크기 균형)
