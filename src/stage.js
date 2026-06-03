@@ -8,7 +8,7 @@ export const MAX_ROUNDS = 11;
 // 아케이드 11라운드 정본 — 1차 자료(사용자 제공 doc/원더보이보스정보.html) 기준.
 // HP는 그라디우스(공격력1) 기준 타수. 검 드롭: R2 킹뱀파이어→브로드, R5 자이언트콩→그레이트,
 // R7 코인컬렉터→엑스칼리버, R8 데몬→레전드. (그라디우스는 R1 NPC 지급)
-// ※ 자료는 R2/R5/R7/R8에 메인+서브 2단 보스 구조를 명시 — 현재는 대표(검드롭)보스로 압축. 2단 구현은 후속.
+// ※ 자료대로 R2/R5/R7/R8은 2단 보스(chain). X-1=검 드롭, X-2=열쇠 드롭(마지막 보스 격파 시 성문 개방).
 // MEKA DRAGON hp2=192 = 2페이즈 데이터(2페이즈 전투는 후속 #8).
 // dir: 진행 방향(RL 라운드는 데이터에만 표기, 카메라 반전은 후속 단계). segments: 구역 시퀀스.
 //   town  = 문(상점/시설) 밀집 / field = 적·픽업·지형 / climb = 다층 플랫폼 / bossgate = 보스문
@@ -18,6 +18,8 @@ const ROUNDS = [
     segments: [ { type:'town', len:640, doors:['quest','shield','boots'] }, { type:'field', len:880, terrain:'grass', enemies:3, pickup:'buff' }, { type:'climb', len:400 }, { type:'bossgate', len:240 } ] },
   { name: 'KING VAMPIRE', sky: '#1f6a3a', boss: 'fly',    hp: 6,  score: 2000,  sword: 'broad',     dir: 'LR',
     enemies: ['myconid','snake','fangbat'],
+    chain: [ { name:'KING VAMPIRE',   type:'fly',    hp:6, score:2000, sword:'broad' },
+             { name:'MYCONID MASTER', type:'ground', hp:8, score:2000, sword:null   } ],
     segments: [ { type:'town', len:600, doors:['shield','boots','magic'] }, { type:'field', len:1000, terrain:'water', enemies:3, pickup:'heart' }, { type:'climb', len:460 }, { type:'field', len:560, terrain:'grass', enemies:2, pickup:'potion' }, { type:'bossgate', len:240 } ] },
   { name: 'RED KNIGHT', sky: '#44506a', boss: 'ground', hp: 20,  score: 3000,  sword: null,        dir: 'RL',
     enemies: ['orc','skeleton','fangbat'],
@@ -27,15 +29,21 @@ const ROUNDS = [
     segments: [ { type:'field', len:820, terrain:'coast', enemies:3, pickup:'gold' }, { type:'town', len:520, doors:['boots','magic'] }, { type:'field', len:820, terrain:'water', enemies:2, pickup:'heart' }, { type:'bossgate', len:240 } ] },
   { name: 'GIANT KONG', sky: '#338800', boss: 'ground', hp: 64,  score: 3000,  sword: 'great',     dir: 'LR',
     enemies: ['orc','werebat','anaconda'],
+    chain: [ { name:'GIANT KONG',   type:'ground', hp:64, score:3000, sword:'great' },
+             { name:'VAMPIRE BATS', type:'fly',    hp:16, score:2000, sword:null    } ],
     segments: [ { type:'town', len:600, doors:['shield','armor','magic'] }, { type:'field', len:1120, terrain:'mountain', enemies:4, pickup:'buff' }, { type:'climb', len:540 }, { type:'bossgate', len:240 } ] },
   { name: 'SPHINX', sky: '#aaaa77', boss: 'ground', hp: 84,  score: 3000,  sword: null,        dir: 'LR',
     enemies: ['anaconda','skeleton','wisp'],
     segments: [ { type:'town', len:580, doors:['shield','armor','magic'] }, { type:'field', len:1140, terrain:'desert', enemies:3, pickup:'potion' }, { type:'climb', len:480 }, { type:'bossgate', len:240 } ] },
   { name: 'COIN COLLECTOR', sky: '#7a1f1f', boss: 'fly',    hp: 32,  score: 4000,  sword: 'excalibur', dir: 'LR',
     enemies: ['wisp','wererat','ghost'],
+    chain: [ { name:'COIN COLLECTOR', type:'fly',    hp:32, score:4000, sword:'excalibur' },
+             { name:'BLUE KNIGHT',    type:'ground', hp:64, score:4000, sword:null        } ],
     segments: [ { type:'field', len:900, terrain:'lava', enemies:3, pickup:'gold' }, { type:'town', len:520, doors:['armor','magic'] }, { type:'field', len:820, terrain:'lava', enemies:3, pickup:'buff' }, { type:'bossgate', len:240 } ] },
   { name: 'DEMON', sky: '#2a1f3a', boss: 'ground', hp: 96,  score: 3000,  sword: 'legend',    dir: 'LR',
     enemies: ['wisp','goblin','werebat'],
+    chain: [ { name:'DEMON',      type:'ground', hp:96, score:3000, sword:'legend' },
+             { name:'HOB GOBLIN', type:'ground', hp:96, score:4000, sword:null     } ],
     segments: [ { type:'field', len:1000, terrain:'dungeon', enemies:3, pickup:'heart' }, { type:'town', len:520, doors:['armor','magic'] }, { type:'climb', len:540 }, { type:'bossgate', len:240 } ] },
   { name: 'SNOW KONG', sky: '#88ccee', boss: 'ground', hp: 96,  score: 4000,  sword: null,        dir: 'RL',
     enemies: ['snowyeti','yeti','ratmaster'],
@@ -131,14 +139,19 @@ export function buildStage(stageNum) {
   // R1: 첫 NPC(그라디우스 + 물약) 직후, 검 받기 전 길을 막는 장애물
   const gate = stageNum === 1 ? { x: 250, y: GROUND_Y - 90, w: 26, h: 90 } : null;
 
-  // 보스 객체(스탯). 위치/순찰은 아레나 입장 시 설정됨
-  const boss = new Boss(round.boss, fieldLen, GROUND_Y - 48, {
-    name: round.name, hp: round.hp, score: round.score,
-    swordReward: round.sword ? SWORD[round.sword] : null,
-  });
+  // 보스 체인(스탯). 단일 보스 라운드는 1체, 2단 라운드(R2/R5/R7/R8)는 2체.
+  // X-1=검 드롭, 마지막 보스=열쇠 드롭. 위치/순찰은 아레나 입장 시 설정됨.
+  const chainSpec = round.chain || [{
+    name: round.name, type: round.boss, hp: round.hp, score: round.score, sword: round.sword,
+  }];
+  const bossChain = chainSpec.map(s => new Boss(s.type, fieldLen, GROUND_Y - 48, {
+    name: s.name, hp: s.hp, score: s.score,
+    swordReward: s.sword ? SWORD[s.sword] : null,
+  }));
+  const boss = bossChain[0];
 
   return {
-    platforms, enemies, doors, boss, groundLen, gate, pickups, bossDoor, dir,
+    platforms, enemies, doors, boss, bossChain, groundLen, gate, pickups, bossDoor, dir,
     sky: round.sky, roundName: round.name, final: !!round.final,
   };
 }

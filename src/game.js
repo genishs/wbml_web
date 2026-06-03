@@ -194,20 +194,27 @@ export class Game {
     return true;
   }
 
-  // 보스문 진입 → 화면 가득한 보스방(아레나)으로 전환. 보스를 직접 상대.
-  _enterBossArena() {
-    const boss = this.stageData.boss;
+  // 보스 객체를 아레나 좌표(우측 등장)에 배치
+  _placeBossInArena(boss) {
     boss.active = true; boss.dead = false; boss._rewarded = false; boss.deathTimer = 0;
     boss.x = VIEW_W - 140; boss.homeX = boss.x; boss.homeY = GROUND_Y - 48;
     boss.y = boss.flies ? boss.homeY : GROUND_Y - boss.h;
     boss.patrolMin = 80; boss.patrolMax = VIEW_W - boss.w - 40;
     boss.vx = -(boss.speed || 1); boss.tick = 0;
+  }
+
+  // 보스문 진입 → 화면 가득한 보스방(아레나)으로 전환. 보스를 직접 상대.
+  // 2단 라운드(R2/R5/R7/R8)는 1번 방→격파→2번 방 순서로 이어진다.
+  _enterBossArena() {
+    const chain = this.stageData.bossChain;
+    this._placeBossInArena(chain[0]);
 
     this.arena = {
       platforms:  [{ x: 0, y: GROUND_Y, w: VIEW_W, h: 60, isGround: true }],
       castleGate: { x: VIEW_W - 74, y: GROUND_Y - 132, w: 60, h: 132 },
       groundLen:  VIEW_W,
       sky: this.stageData.sky,
+      chain, bossIndex: 0, boss: chain[0],
     };
     const p = this.player;
     p.x = 40; p.y = GROUND_Y - p.h; p.vx = 0; p.vy = 0; p.invincible = 40;
@@ -215,12 +222,13 @@ export class Game {
     this.camX = 0; this.nearDoor = null;
     this.projectiles = []; this.enemyShots = []; this.pickups = [];
     audio.sfx('roomlock');
-    this._notice(`${this.stageData.roundName} 등장!`, 150);
+    const more = chain.length > 1 ? `   (1/${chain.length})` : '';
+    this._notice(`${chain[0].name} 등장!${more}`, 150);
   }
 
   _updateArena() {
     const { player, input, arena } = this;
-    const boss = this.stageData.boss;
+    const boss = arena.boss;
 
     player.update(input, arena.platforms);
     if (this.noticeTimer > 0) this.noticeTimer--;
@@ -237,10 +245,27 @@ export class Game {
         boss._rewarded = true;
         audio.sfx('bossdown');
         player.hp = Math.min(player.maxHp, player.hp + 1);   // 격파 시 하트 1칸 회복
-        player.inventory.key = 1;                            // 열쇠 드롭
         if (boss.swordReward) player.awardSword(boss.swordReward);
-        if (this.stageData.final) { this.state = GAME_STATE.WIN; return; }
-        this._notice('보스 격파! 열쇠로 성문을 열어라 →', 240);
+
+        const hasNext = arena.bossIndex < arena.chain.length - 1;
+        if (hasNext) {
+          // 2단 보스: 다음 방으로 — 열쇠는 아직 드롭되지 않음
+          arena.bossIndex++;
+          const next = arena.chain[arena.bossIndex];
+          arena.boss = next;
+          this._placeBossInArena(next);
+          player.x = 40; player.y = GROUND_Y - player.h; player.vx = 0; player.vy = 0;
+          player.invincible = 60;
+          this.projectiles = []; this.enemyShots = [];
+          audio.sfx('roomlock');
+          const swordMsg = boss.swordReward ? `${boss.swordReward.name} 획득!  ` : '';
+          this._notice(`${swordMsg}안쪽 방: ${next.name} 등장! (${arena.bossIndex + 1}/${arena.chain.length})`, 240);
+        } else {
+          // 마지막 보스: 열쇠 드롭 → 성문 개방
+          player.inventory.key = 1;
+          if (this.stageData.final) { this.state = GAME_STATE.WIN; return; }
+          this._notice('보스 격파! 열쇠로 성문을 열어라 →', 240);
+        }
       }
     }
 
@@ -273,9 +298,9 @@ export class Game {
   }
 
   _allTargets() {
-    const b = this.stageData.boss;
+    const b = this.arena ? this.arena.boss : this.stageData.boss;
     const bossLive = b && b.active && !(b.dead && b.deathTimer <= 0);
-    if (this.arena) return bossLive ? [b] : [];       // 아레나: 보스만 대상
+    if (this.arena) return bossLive ? [b] : [];       // 아레나: 현재 보스만 대상
     const t = this.stageData.enemies.filter(e => !(e.dead && e.deathTimer <= 0));
     if (bossLive) t.push(b);
     return t;
@@ -457,7 +482,7 @@ export class Game {
     ctx.clip();
 
     if (this.arena) {
-      drawArena(ctx, this.arena, stageData.boss, player.inventory.key >= 1);
+      drawArena(ctx, this.arena, this.arena.boss, player.inventory.key >= 1);
     } else {
       drawStage(ctx, stageData, camX);
       // 1라운드 장애물 (검 받기 전 통행 차단)
