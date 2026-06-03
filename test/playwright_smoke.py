@@ -130,6 +130,27 @@ def run(page):
                 # 60fps×30프레임=0.5s 목표. 폴링/렌더 변동 고려해 0.40~0.70s 허용.
                 check('찌르기 지속 ≈0.5초', 0.40 <= dur <= 0.70, f'{dur*1000:.0f}ms')
 
+    # 9) 숨은 문 — ↑로 탐색해 드러나는가 (R3: 숨은 방패 상점)
+    page.evaluate("() => window.__game._loadStage(3)")
+    time.sleep(0.1)
+    hd = page.evaluate("""() => {
+        const d = window.__game.stageData.doors.find(x => x.hidden);
+        return d ? { x: d.x, w: d.w, type: d.type, revealed: !!d.revealed } : null;
+    }""")
+    check('숨은 문 존재(초기 미발견)', bool(hd) and not hd['revealed'], hd and hd['type'])
+    if hd:
+        # 플레이어를 숨은 문 앞 지면에 세우고 한 프레임 흘려 nearDoor 갱신
+        cx = hd['x'] + hd['w'] / 2
+        page.evaluate(f"""() => {{ const p = window.__game.player;
+            p.x = {cx} - p.w/2; p.y = 300 - p.h; p.vx = 0; p.vy = 0; }}""")
+        time.sleep(0.12)
+        before = page.evaluate("() => window.__game.stageData.doors.find(x => x.hidden) && window.__game.stageData.doors.find(x => x.hidden).revealed")
+        press(page, 'ArrowUp')
+        time.sleep(0.1)
+        after = page.evaluate("() => window.__game.stageData.doors.find(x => x.hidden && x.revealed) ? true : false")
+        check('↑ 누르면 숨은 문 드러남(revealed)', (not before) and after, f'{before}→{after}')
+        page.screenshot(path=str(SHOTS / 'hidden_revealed.png'))
+
 def main():
     started = None
     if not server_up():

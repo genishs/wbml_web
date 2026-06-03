@@ -158,10 +158,22 @@ export function buildStage(stageNum) {
   }
 
   // 검 보스 문(2단 라운드의 X-1): 스테이지 중반 별도 방. 처치 시 검을 떨어뜨리고 방을 나온다.
+  // 원작대로 검 가디언은 '비밀 입구' 뒤 — 숨은 문(↑로 탐색해 드러냄).
   swordBosses.forEach((sb, i) => {
     const sx = Math.round(fieldLen * (0.38 + i * 0.18));
-    doors.push(makeBossDoor('sword-door-' + i, sx, 'swordboss', sb, 'sword'));
+    const d = makeBossDoor('sword-door-' + i, sx, 'swordboss', sb, 'sword');
+    d.hidden = true; d.revealed = false;
+    doors.push(d);
   });
+
+  // 숨은 보너스 상점: 특정 지점에서 ↑를 눌러야 드러나는 추가 상점(원작의 ↑탐색 재미).
+  const HIDDEN_SHOP = { 3: 'shield', 4: 'magic', 6: 'magic', 9: 'armor', 10: 'magic' };
+  if (HIDDEN_SHOP[stageNum]) {
+    const hx = Math.round(fieldLen * 0.64);
+    const d = makeDoor('hidden-shop', hx, HIDDEN_SHOP[stageNum]);
+    d.hidden = true; d.revealed = false;
+    doors.push(d);
+  }
 
   // 성문(스테이지 출구): 필드 끝. 열쇠 보유 시 통과해 클리어. 보스방 안이 아니라 필드에 있음.
   const castleGate = { x: groundLen - 100, y: GROUND_Y - 132, w: 60, h: 132 };
@@ -293,6 +305,9 @@ function _drawDoors(ctx, doors, camX) {
     const sx = d.x - camX + HUD_W;
     if (sx + d.w < HUD_W || sx > 640) continue;
 
+    // 숨은 문(미발견): 정식 문은 그리지 않고 미세한 반짝임만 — ↑로 탐색해 드러냄
+    if (d.hidden && !d.revealed) { _drawHiddenHint(ctx, sx, d); continue; }
+
     if (d.type === 'boss' || d.type === 'swordboss') { _drawBossDoor(ctx, sx, d); continue; }
 
     // 문 틀
@@ -344,6 +359,19 @@ function _drawBossDoor(ctx, sx, d) {
     ctx.fillText(isSword ? 'SWORD' : 'BOSS', mx, d.y - 20);
   }
   ctx.textAlign = 'left';
+}
+
+// 숨은 문 힌트: 벽/지면에 아주 옅게 깜빡이는 반짝임. 위치를 어렴풋이 암시하되 노골적이지 않게.
+function _drawHiddenHint(ctx, sx, d) {
+  const t = Date.now() / 260 + sx * 0.05;
+  const a = 0.10 + 0.09 * Math.sin(t);
+  const cx = Math.round(sx + d.w / 2), cy = Math.round(d.y + d.h * 0.55);
+  ctx.fillStyle = `rgba(255,255,190,${a})`;
+  ctx.fillRect(cx - 1, cy - 1, 2, 2);
+  ctx.fillStyle = `rgba(255,255,190,${a * 0.7})`;
+  ctx.fillRect(cx - 7, cy + 3, 1, 1);
+  ctx.fillRect(cx + 6, cy - 4, 1, 1);
+  ctx.fillRect(cx + 2, cy + 6, 1, 1);
 }
 
 function _torch(ctx, x, y) {

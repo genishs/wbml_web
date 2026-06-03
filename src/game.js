@@ -179,7 +179,12 @@ export class Game {
     }
     if (this.nearDoor && input.wasPressed('ArrowUp')) {
       const d = this.nearDoor, t = d.type;
-      if (t === 'quest')                      this._questGift();
+      if (d.hidden && !d.revealed) {          // 숨은 문: 이번 ↑는 '발견'으로 소비, 진입은 다음 ↑
+        d.revealed = true;
+        audio.sfx('secret');
+        this._notice('숨겨진 문이 나타났다!', 120);
+      }
+      else if (t === 'quest')                 this._questGift();
       else if (t === 'boss' || t === 'swordboss') {
         if (d.cleared) this._notice('텅 빈 방이다.', 60);
         else this._enterBossArena(d);
@@ -530,7 +535,8 @@ export class Game {
 
     player.draw(ctx, worldCamX);
 
-    if (this.nearDoor && !this.shop.open && !this.facility.open && this.state === GAME_STATE.PLAYING) {
+    if (this.nearDoor && !(this.nearDoor.hidden && !this.nearDoor.revealed) &&
+        !this.shop.open && !this.facility.open && this.state === GAME_STATE.PLAYING) {
       const d  = this.nearDoor;
       const sx = d.x - camX + HUD_W + d.w / 2;
       ctx.fillStyle = '#ffff44';
