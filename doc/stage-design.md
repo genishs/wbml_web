@@ -322,7 +322,7 @@ StrategyWiki/GameFAQs의 "Round N" 페이지는 대부분 **SMS 이식판(12라�
 3. **병원/바 시설 추가**(door 타입 + 누진 비용 20/40/70/100/110): 회복 경제 루프 복원.
 4. **숨은 문(hidden + ↑탐색)**: 후반 무기/열쇠/보너스 발견의 재미.
 5. **진행 방향 `dir` 도입**(R3·R4·R10 = RL): 단조로운 좌→우 탈피.
-6. **특수 지형(water/lava/spring/floatBlock/cloud)**: R1 떠다니는 블록, R2 물, R4 스프링·구름, R7/R9 용암.
+6. **특수 지형(water/lava/spring/cloud)** ✅: stage.js `hazards[]` + game `_applyHazards()`. water/coast(R2·R4)=부력·감속·헤엄, lava(R7)=접촉피해+직전 도약대, spring=강도약(-16), cloud=하늘빛 라운드(R1·2·4·9) climb 발판(통과+착지). RL 라운드는 미러링 포함. *(floatBlock는 cloud로 통합.)*
 7. **R6 스핑크스 퀴즈 분기 + 바 힌트**: 원작 상징 이벤트.
 8. **R11 미로 + 보스 러시 + 메카 드래곤 2페이즈**: 피날레 체감.
 9. **R10 종/루비 선택 분기**(R11 미로 안내 / 최종보스 약화): 선택의 의미.
