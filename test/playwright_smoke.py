@@ -169,6 +169,36 @@ def run(page):
     x1 = page.evaluate("() => window.__game.player.x")
     check('RL: 왼쪽 이동 반영(x 감소)', x1 < x0 - 2, f'{x0:.0f} → {x1:.0f}')
 
+    # 11) 특수지형 해저드 — R7(용암) 생성 + 스프링 도약, R2(물) 부력
+    page.evaluate("() => window.__game._loadStage(7)")
+    time.sleep(0.1)
+    hz7 = page.evaluate("() => window.__game.stageData.hazards.map(h => h.kind)")
+    check('R7 해저드 생성(lava/spring)', 'lava' in hz7 and 'spring' in hz7, ','.join(sorted(set(hz7))))
+
+    # 스프링: 발판 위 지면에 세우고 한 프레임 흘리면 위로 튕겨야(vy<0)
+    spr = page.evaluate("() => window.__game.stageData.hazards.find(h => h.kind === 'spring')")
+    if spr:
+        cx = spr['x'] + spr['w'] / 2
+        page.evaluate(f"""() => {{ const p = window.__game.player;
+            p.x = {cx} - p.w/2; p.y = 300 - p.h; p.vx = 0; p.vy = 0; p.onGround = true; }}""")
+        time.sleep(0.12)   # 몇 프레임 → 착지 순간 스프링 발동
+        vy = page.evaluate("() => window.__game.player.vy")
+        check('스프링 발판 도약(vy<0)', vy < -3, f'vy={vy:.1f}')
+
+    page.evaluate("() => window.__game._loadStage(2)")
+    time.sleep(0.1)
+    water = page.evaluate("() => window.__game.stageData.hazards.find(h => h.kind === 'water')")
+    check('R2 물 해저드 생성', bool(water), water and f"x={water['x']}")
+    if water:
+        # 물 안에 세우고 한 프레임 → inWater 플래그 ON
+        cx = water['x'] + water['w'] / 2
+        page.evaluate(f"""() => {{ const p = window.__game.player;
+            p.x = {cx} - p.w/2; p.y = 300 - p.h; p.vx = 0; p.vy = 0; }}""")
+        time.sleep(0.1)
+        inw = page.evaluate("() => window.__game.player.inWater")
+        check('물 안에서 inWater=true(부력 적용)', inw is True, f'inWater={inw}')
+        page.screenshot(path=str(SHOTS / 'hazard_water.png'))
+
 def main():
     started = None
     if not server_up():

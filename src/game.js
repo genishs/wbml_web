@@ -1,4 +1,4 @@
-import { CANVAS_W, CANVAS_H, HUD_W, VIEW_W, GAME_STATE, GROUND_Y } from './constants.js';
+import { CANVAS_W, CANVAS_H, HUD_W, VIEW_W, GAME_STATE, GROUND_Y, SPRING_FORCE } from './constants.js';
 import { Input } from './input.js';
 import { Player } from './player.js';
 import { buildStage, drawStage, drawArena } from './stage.js';
@@ -136,6 +136,7 @@ export class Game {
     const { player, stageData, input } = this;
 
     player.update(input, stageData.platforms);
+    this._applyHazards();                       // 물/용암/스프링 효과(이동·충돌 직후)
 
     if (this.noticeTimer > 0) this.noticeTimer--;
     if (this._checkPotionOrDie()) return;
@@ -225,6 +226,35 @@ export class Game {
     }
     this.state = GAME_STATE.GAME_OVER;
     return true;
+  }
+
+  // 특수지형 해저드 적용(필드 전용). 물=부력/감속 플래그, 용암=접촉 피해+튕겨남, 스프링=도약.
+  _applyHazards() {
+    const { player, stageData } = this;
+    const haz = stageData.hazards;
+    if (!haz || !haz.length) { player.inWater = false; return; }
+    const pb = { x: player.x, y: player.y, w: player.w, h: player.h };
+    let inWater = false;
+    for (const h of haz) {
+      if (h.kind === 'spring') {                 // 윗면을 밟으면(착지 순간) 강하게 튕겨 오름
+        if (player.vy >= 0 && player.onGround &&
+            player.x + player.w > h.x && player.x < h.x + h.w) {
+          player.vy = SPRING_FORCE; player.onGround = false; player.state = 'jump';
+          audio.sfx('spring');
+        }
+        continue;
+      }
+      if (!_overlap(pb, h)) continue;
+      if (h.kind === 'water') inWater = true;
+      else if (h.kind === 'lava') {              // 접촉 피해 + 위로 튕겨 빠져나옴
+        if (player.invincible === 0 && player.takeDamage(2, 'contact')) {
+          audio.sfx('sizzle');
+          player.vy = -8; player.vx = player.facing * -4; player.onGround = false;
+          this._notice('용암! 앗 뜨거', 60);
+        }
+      }
+    }
+    player.inWater = inWater;
   }
 
   // 보스 객체를 아레나 좌표(우측 등장)에 배치

@@ -26,6 +26,7 @@ export class Player {
     this.stateTimer = 0;
     this.animFrame  = 0;
     this.animTick   = 0;
+    this.inWater    = false;   // 물 해저드 안에 있는지(부력/감속·헤엄 — game._applyHazards가 매 프레임 설정)
 
     this.hp = 5; this.maxHp = 5;   // 아케이드: 시작 5, 점수로 최대 10까지 확장
     this.score = 0;
@@ -95,8 +96,8 @@ export class Player {
 
   activeMagic() { return this.magicStack[this.magicStack.length - 1] || null; }
 
-  // 갑옷 agi(음수)는 이동/점프를 깎는 민첩성 너프
-  get speed()     { return Math.max(0.8, PLAYER_SPEED + (this.eq.boots?.speed ?? 0) + (this.eq.armor?.agi ?? 0) + (this.buffs.wingboots > 0 ? 0.6 : 0)); }
+  // 갑옷 agi(음수)는 이동/점프를 깎는 민첩성 너프. 물속에선 저항으로 느려짐.
+  get speed()     { const base = PLAYER_SPEED + (this.eq.boots?.speed ?? 0) + (this.eq.armor?.agi ?? 0) + (this.buffs.wingboots > 0 ? 0.6 : 0); return Math.max(0.6, base * (this.inWater ? 0.58 : 1)); }
   get jumpForce() { return JUMP_FORCE - (this.eq.boots?.jump ?? 0) * 0.25 - (this.eq.armor?.agi ?? 0) - (this.buffs.wingboots > 0 ? 3 : 0); }
 
   // 찌르기 진행 단계 0~3 (0:윈드업 1:내지름 2:최대 3:회수)
@@ -182,10 +183,14 @@ export class Player {
       this._handleInput(input);
     }
 
-    this.vy += GRAVITY;
+    // 물속이면 중력 감쇄(부력) + 가라앉는 속도 상한 → 둥실 헤엄치는 감각
+    this.vy += this.inWater ? GRAVITY * 0.42 : GRAVITY;
+    if (this.inWater && this.vy > 1.4) this.vy = 1.4;
     this.x  += this.vx;
     this.y  += this.vy;
-    if (this.state !== 'knockback') this.vx *= (this.eq.boots?.friction ?? 0.80); // 부츠 접지력(천=미끄럼)
+    if (this.state !== 'knockback') {
+      this.vx *= this.inWater ? 0.74 : (this.eq.boots?.friction ?? 0.80); // 물=저항 / 부츠 접지력(천=미끄럼)
+    }
     this._collide(platforms);
 
     if (this.state === 'walk') {
@@ -208,7 +213,10 @@ export class Player {
     else            { this.vx = 0; }
 
     if (this.onGround) this.state = (left || right) ? 'walk' : 'idle';
-    if (jmp && this.onGround) { this.vy = this.jumpForce; this.onGround = false; this.state = 'jump'; audio.sfx('jump'); }
+    if (jmp) {
+      if (this.onGround) { this.vy = this.jumpForce; this.onGround = false; this.state = 'jump'; audio.sfx('jump'); }
+      else if (this.inWater) { this.vy = -4.4; this.state = 'jump'; audio.sfx('jump'); } // 물속 헤엄(공중에서도 위로 저음)
+    }
   }
 
   _collide(platforms) {

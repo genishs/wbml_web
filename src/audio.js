@@ -105,6 +105,8 @@ class AudioEngine {
         case 'clear':   [523, 659, 784, 1047].forEach((f, i) => this._tone(f, t + i * .09, .2, 'square', .28)); break;
         case 'secret':  [659, 880, 1175, 1568].forEach((f, i) => this._tone(f, t + i * .06, .12, 'triangle', .26)); this._noise(t, .04, .06); break;
         case 'roomlock': this._tone(120, t, .3, 'sawtooth', .3, 60); this._noise(t, .2, .15); break;
+        case 'spring':  this._tone(280, t, .22, 'square', .26, 1100); this._tone(660, t + .06, .1, 'square', .18); break;
+        case 'sizzle':  this._noise(t, .18, .12); this._tone(160, t, .16, 'sawtooth', .2, 70); break;
         case 'magic_fly':     this._tone(700, t, .18, 'sawtooth', .26, 1200); this._noise(t, .08, .1); break;
         case 'magic_roll':    this._tone(160, t, .2, 'square', .24, 80); break;
         case 'magic_tornado': this._tone(420, t, .32, 'sawtooth', .2, 900); this._noise(t, .3, .08); break;

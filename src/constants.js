@@ -8,6 +8,7 @@ export const VIEW_H = 360;
 
 export const GRAVITY = 0.45;
 export const JUMP_FORCE = -10;
+export const SPRING_FORCE = -16;   // 스프링 발판 도약력(일반 점프보다 강함 → 높은 곳/용암 건너기)
 export const PLAYER_SPEED = 2.2;
 
 export const GROUND_Y = 300;     // 지면 y좌표 (발이 닿는 위치)

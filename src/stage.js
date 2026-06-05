@@ -87,6 +87,8 @@ export function buildStage(stageNum) {
   const enemies   = [];
   const doors     = [];
   const pickups   = [];
+  const hazards   = [];     // 특수지형: water(부력·감속)/lava(접촉피해)/spring(도약대). cloud는 발판 플래그
+  const cloudy    = [1, 2, 4, 9].includes(stageNum);  // 하늘빛 라운드 → climb에 구름 발판 + 도약대
 
   // 보스 체인(스탯). 단일 보스 라운드는 1체, 2단 라운드(R2/R5/R7/R8)는 2체.
   // 원작 구조: 검 보스(X-1)는 별도 문/방 → 처치 시 검 드롭. 마지막=스테이지 보스 → 열쇠 드롭.
@@ -125,6 +127,16 @@ export function buildStage(stageNum) {
       for (let px = x0 + 140; px < x1 - 140; px += 320) {
         platforms.push({ x: px, y: GROUND_Y - (70 + (px % 3) * 12), w: 100, h: 16, terrain: seg.terrain });
       }
+      // 특수지형 해저드(원작): 물/늪=감속·부력 / 용암=접촉 피해(앞에 도약대) / 모래=감속
+      if (seg.terrain === 'water' || seg.terrain === 'coast') {
+        const hw = Math.round(Math.min(300, seg.len * 0.36));
+        hazards.push({ kind: 'water', x: Math.round(mid - hw / 2), y: GROUND_Y - 22, w: hw, h: 82 });
+      } else if (seg.terrain === 'lava') {
+        const lw = Math.round(Math.min(130, seg.len * 0.16));
+        const lx = Math.round(x0 + seg.len * 0.46);
+        hazards.push({ kind: 'lava',   x: lx,       y: GROUND_Y - 10, w: lw, h: 70 });
+        hazards.push({ kind: 'spring', x: lx - 58,  y: GROUND_Y - 14, w: 32, h: 14 });  // 용암 직전 도약대
+      }
       if (seg.pickup) {
         const type = seg.pickup === 'buff' ? buff : seg.pickup;
         const low  = seg.pickup === 'gold' || seg.pickup === 'potion';
@@ -135,8 +147,11 @@ export function buildStage(stageNum) {
       const steps = seg.steps ?? 4;
       for (let k = 0; k < steps; k++) {
         const px = x0 + seg.len * (k + 0.5) / steps - 50;
-        platforms.push({ x: px, y: GROUND_Y - 60 - k * 38, w: 92, h: 16 });
+        const plat = { x: px, y: GROUND_Y - 60 - k * 38, w: 92, h: 16 };
+        if (cloudy) plat.cloud = true;          // 구름 발판(아래→위 통과 가능, 시각만 구분; 충돌은 본디 윗면 전용)
+        platforms.push(plat);
       }
+      if (cloudy) hazards.push({ kind: 'spring', x: Math.round(x0 + 30), y: GROUND_Y - 14, w: 32, h: 14 }); // 구름까지 도약
       const t  = eTypes[ei++ % eTypes.length];
       const ey = enemyAirborne(t) ? GROUND_Y - 150 : GROUND_Y - 90;
       enemies.push(new Enemy(t, mid, ey, { patrolMin: mid - 60, patrolMax: mid + 60 }));
@@ -183,10 +198,10 @@ export function buildStage(stageNum) {
 
   // RL 라운드(R3·R4·R9): 원작은 우→좌 진행. LR로 배치한 뒤 전체 x를 좌우 미러링한다.
   // (플레이어 우측 스폰·카메라/성문 충돌 방향 처리는 game.js에서 dir로 분기.)
-  if (dir === 'RL') _mirrorStageX({ platforms, enemies, doors, pickups, castleGate, gate }, groundLen);
+  if (dir === 'RL') _mirrorStageX({ platforms, enemies, doors, pickups, castleGate, gate, hazards }, groundLen);
 
   return {
-    platforms, enemies, doors, boss, bossChain, groundLen, gate, castleGate, pickups, bossDoor, dir,
+    platforms, enemies, doors, boss, bossChain, groundLen, gate, castleGate, pickups, bossDoor, dir, hazards,
     sky: round.sky, roundName: round.name, final: !!round.final,
   };
 }
@@ -199,6 +214,7 @@ function _mirrorStageX(d, len) {
   for (const pk of d.pickups)  pk.x = mx(pk.x, pk.w);
   if (d.castleGate) d.castleGate.x = mx(d.castleGate.x, d.castleGate.w);
   if (d.gate)       d.gate.x       = mx(d.gate.x, d.gate.w);
+  for (const h of d.hazards)   h.x = mx(h.x, h.w);
   for (const e of d.enemies) {
     const nx = mx(e.x, e.w);
     const pmin = mx(e.patrolMax, e.w), pmax = mx(e.patrolMin, e.w);  // 순찰 범위도 반전
@@ -211,6 +227,7 @@ export function drawStage(ctx, stageData, camX, hasKey) {
   const { platforms, enemies, doors } = stageData;
   _drawSky(ctx, stageData.sky);
   _drawPlatforms(ctx, platforms, camX);
+  _drawHazards(ctx, stageData.hazards, camX);
   _drawDoors(ctx, doors, camX);
   _drawCastleGate(ctx, stageData.castleGate, camX, hasKey);   // 스테이지 끝 성문(필드)
   for (const e of enemies) e.draw(ctx, camX);
@@ -311,6 +328,16 @@ function _drawPlatforms(ctx, platforms, camX) {
       for (let tx = 0; tx < p.w; tx += 48) {
         ctx.fillRect(sx + tx, p.y + 10, 40, 4);
       }
+    } else if (p.cloud) {
+      // 구름 발판: 아래에서 위로 통과 가능, 윗면에만 착지(원작 부유 발판)
+      const t = Date.now() / 500 + sx * 0.02;
+      ctx.fillStyle = 'rgba(245,250,255,0.95)';
+      for (let cx = 0; cx < p.w; cx += 18) {
+        const r = 9 + Math.sin(t + cx * 0.3) * 2;
+        ctx.fillRect(sx + cx, p.y - r + 6, 20, r + 4);
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fillRect(sx, p.y, p.w, 6);
+      ctx.fillStyle = 'rgba(200,215,235,0.8)'; ctx.fillRect(sx, p.y + 5, p.w, 2);
     } else {
       ctx.fillStyle = '#774433';
       ctx.fillRect(sx, p.y, p.w, p.h);
@@ -318,6 +345,56 @@ function _drawPlatforms(ctx, platforms, camX) {
       ctx.fillRect(sx, p.y, p.w, 5);
     }
   }
+}
+
+// 특수지형 해저드 렌더(애니메이션은 Date.now 기반 — 게임 프레임과 무관하게 부드럽게)
+function _drawHazards(ctx, hazards, camX) {
+  if (!hazards) return;
+  const now = Date.now();
+  for (const h of hazards) {
+    const sx = Math.round(h.x - camX + HUD_W);
+    if (sx + h.w < HUD_W || sx > 640) continue;
+    if (h.kind === 'water')       _drawWater(ctx, sx, h, now);
+    else if (h.kind === 'lava')   _drawLava(ctx, sx, h, now);
+    else if (h.kind === 'spring') _drawSpring(ctx, sx, h);
+  }
+}
+
+function _drawWater(ctx, sx, h, now) {
+  ctx.fillStyle = 'rgba(40,120,220,0.42)';
+  ctx.fillRect(sx, h.y + 6, h.w, h.h);
+  ctx.fillStyle = 'rgba(120,190,255,0.55)';                 // 출렁이는 수면
+  for (let x = 0; x < h.w; x += 8) {
+    const yy = h.y + 6 + Math.sin(now / 240 + (sx + x) * 0.06) * 2;
+    ctx.fillRect(sx + x, Math.round(yy), 6, 3);
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';                 // 반짝임
+  for (let x = (Math.floor(now / 300) * 4) % 24; x < h.w; x += 30) ctx.fillRect(sx + x, h.y + 13, 3, 1);
+}
+
+function _drawLava(ctx, sx, h, now) {
+  ctx.fillStyle = '#7a1500'; ctx.fillRect(sx, h.y + 4, h.w, h.h);
+  ctx.fillStyle = '#ff5a00';                                // 끓는 표면
+  for (let x = 0; x < h.w; x += 6) {
+    const yy = h.y + 2 + Math.sin(now / 160 + (sx + x) * 0.09) * 2;
+    ctx.fillRect(sx + x, Math.round(yy), 6, 6);
+  }
+  ctx.fillStyle = '#ffd000';                                // 부글거리는 밝은 점
+  for (let i = 0; i < h.w; i += 22) {
+    const bx = (i + Math.floor(now / 120) * 4) % h.w;
+    const by = h.y + 4 + (Math.sin(now / 200 + i) + 1) * 3;
+    ctx.fillRect(sx + bx, Math.round(by), 3, 3);
+  }
+  ctx.fillStyle = 'rgba(255,90,0,0.12)';                    // 열기 글로우
+  ctx.fillRect(sx - 6, h.y - 22, h.w + 12, 28);
+}
+
+function _drawSpring(ctx, sx, h) {
+  ctx.fillStyle = '#888c96'; ctx.fillRect(sx + 2, h.y + h.h - 4, h.w - 4, 4);   // 받침
+  ctx.fillStyle = '#c8ccd6';                                                    // 코일
+  for (let i = 0; i < 3; i++) ctx.fillRect(sx + 4, h.y + 3 + i * 4, h.w - 8, 2);
+  ctx.fillStyle = '#ff4444'; ctx.fillRect(sx + 1, h.y, h.w - 2, 4);             // 윗판
+  ctx.fillStyle = '#ff9090'; ctx.fillRect(sx + 1, h.y, h.w - 2, 1);
 }
 
 function _drawDoors(ctx, doors, camX) {
