@@ -169,11 +169,12 @@ def run(page):
     x1 = page.evaluate("() => window.__game.player.x")
     check('RL: 왼쪽 이동 반영(x 감소)', x1 < x0 - 2, f'{x0:.0f} → {x1:.0f}')
 
-    # 11) 특수지형 해저드 — R7(용암) 생성 + 스프링 도약, R2(물) 부력
-    page.evaluate("() => window.__game._loadStage(7)")
+    # 11) 특수지형 해저드 — R8(용암 구역) 생성 + 스프링 도약, R2(물) 부력
+    #     ※ 구역 재설계로 용암은 R8(lava biome)로 이동, R7은 해변(beach)
+    page.evaluate("() => window.__game._loadStage(8)")
     time.sleep(0.1)
-    hz7 = page.evaluate("() => window.__game.stageData.hazards.map(h => h.kind)")
-    check('R7 해저드 생성(lava/spring)', 'lava' in hz7 and 'spring' in hz7, ','.join(sorted(set(hz7))))
+    hz8 = page.evaluate("() => window.__game.stageData.hazards.map(h => h.kind)")
+    check('R8 해저드 생성(lava/spring)', 'lava' in hz8 and 'spring' in hz8, ','.join(sorted(set(hz8))))
 
     # 스프링: 발판 위 지면에 세우고 한 프레임 흘리면 위로 튕겨야(vy<0)
     spr = page.evaluate("() => window.__game.stageData.hazards.find(h => h.kind === 'spring')")
@@ -198,6 +199,20 @@ def run(page):
         inw = page.evaluate("() => window.__game.player.inWater")
         check('물 안에서 inWater=true(부력 적용)', inw is True, f'inWater={inw}')
         page.screenshot(path=str(SHOTS / 'hazard_water.png'))
+
+    # 12) 구역(biome) 시퀀스 — 멀티 biome 라운드 areas[] 생성 + 구역 전환 스샷
+    def biomes_of(n):
+        return page.evaluate(f"() => {{ window.__game._loadStage({n}); return [...new Set(window.__game.stageData.areas.map(a=>a.biome))]; }}")
+    b5 = biomes_of(5)
+    check('R5 구역 시퀀스(산→숲→동굴→사막)', set(['mountain','forest','cave','desert']).issubset(set(b5)), '>'.join(b5))
+    b10 = biomes_of(10)
+    check('R10 구역 시퀀스(해변→물속→동굴→성벽)', set(['beach','underwater','cave','castle_out']).issubset(set(b10)), '>'.join(b10))
+    # 구역 경계가 화면에 보이도록 카메라를 중반으로 옮겨 스샷(시각 검토용)
+    for n, tag in [(5, 'r5_mountain_forest'), (8, 'r8_lava_cave'), (10, 'r10_beach_underwater')]:
+        page.evaluate(f"() => {{ const g=window.__game; g._loadStage({n}); const s=g.stageData; const mid=s.areas[1]? s.areas[1].x1 : 600; g.player.x=mid; g.camX=Math.max(0,Math.min(mid-260, s.groundLen-528)); }}")
+        time.sleep(0.1)
+        page.screenshot(path=str(SHOTS / f'{tag}.png'))
+    check('biome 렌더 스샷 캡처', True, 'r5/r8/r10 shots')
 
 def main():
     started = None

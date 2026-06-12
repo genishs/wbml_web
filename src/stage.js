@@ -2,6 +2,10 @@ import { GROUND_Y, HUD_W, VIEW_W, COLORS } from './constants.js';
 import { Enemy, Boss, enemyAirborne } from './enemy.js';
 import { Pickup } from './pickup.js';
 import { SWORD } from './equipment.js';
+import { drawBiomeBackground, biomeHazard, platColors } from './biomes.js';
+
+// 열린 하늘 구역(떠다니는 구름 발판·도약대 배치 대상)
+const OPEN_SKY = new Set(['village', 'meadow', 'beach', 'water', 'island_town']);
 
 export const MAX_ROUNDS = 11;
 
@@ -10,50 +14,52 @@ export const MAX_ROUNDS = 11;
 // R7 코인컬렉터→엑스칼리버, R8 데몬→레전드. (그라디우스는 R1 NPC 지급)
 // ※ 자료대로 R2/R5/R7/R8은 2단 보스(chain). X-1=검 드롭, X-2=열쇠 드롭(마지막 보스 격파 시 성문 개방).
 // MEKA DRAGON hp2=192 = 2페이즈 데이터(2페이즈 전투는 후속 #8).
-// dir: 진행 방향(RL 라운드는 데이터에만 표기, 카메라 반전은 후속 단계). segments: 구역 시퀀스.
-//   town  = 문(상점/시설) 밀집 / field = 적·픽업·지형 / climb = 다층 플랫폼 / bossgate = 보스문
+// dir: 진행 방향(RL=우→좌, 카메라 반전). segments: 구역 시퀀스(각 세그먼트가 biome 보유).
+//   town = 문(상점/시설) 밀집 / field = 적·픽업·지형 / climb = 다층 플랫폼 / bossgate = 보스문
+//   biome(구역): 한 라운드가 여러 구역을 거쳐 진행(해변→물속→동굴→성벽 등). 사용자 확정 구성(2026-06-13).
+//   해저드(물/용암/잠수)는 biome에서 자동 결정(biomes.js). cf. doc/map-composition.md
 const ROUNDS = [
   { name: 'DEATH MASTER', sky: '#0088ff', boss: 'fly',    hp: 4,   score: 2000,  sword: null,        dir: 'LR',
     enemies: ['snake','myconid','fangbat'],
-    segments: [ { type:'town', len:640, doors:['quest','shield','boots'] }, { type:'field', len:880, terrain:'grass', enemies:3, pickup:'buff' }, { type:'climb', len:400 }, { type:'bossgate', len:240 } ] },
+    segments: [ { type:'town', biome:'village', len:600, doors:['quest','shield','boots'] }, { type:'field', biome:'meadow', len:760, enemies:3, pickup:'buff' }, { type:'field', biome:'cave', len:560, enemies:2, pickup:'gold' }, { type:'bossgate', biome:'cave', len:240 } ] },
   { name: 'KING VAMPIRE', sky: '#1f6a3a', boss: 'fly',    hp: 6,  score: 2000,  sword: 'broad',     dir: 'LR',
     enemies: ['myconid','snake','fangbat'],
     chain: [ { name:'KING VAMPIRE',   type:'fly',    hp:6, score:2000, sword:'broad' },
              { name:'MYCONID MASTER', type:'ground', hp:8, score:2000, sword:null   } ],
-    segments: [ { type:'town', len:600, doors:['shield','boots','magic'] }, { type:'field', len:1000, terrain:'water', enemies:3, pickup:'heart' }, { type:'climb', len:460 }, { type:'field', len:560, terrain:'grass', enemies:2, pickup:'potion' }, { type:'bossgate', len:240 } ] },
+    segments: [ { type:'field', biome:'cave', len:440, enemies:2, pickup:'gold' }, { type:'town', biome:'mushroom', len:560, doors:['shield','boots','magic'] }, { type:'field', biome:'mushroom', len:620, enemies:3, pickup:'heart' }, { type:'field', biome:'water', len:560, enemies:2, pickup:'potion' }, { type:'bossgate', biome:'mushroom', len:240 } ] },
   { name: 'RED KNIGHT', sky: '#44506a', boss: 'ground', hp: 20,  score: 3000,  sword: null,        dir: 'RL',
     enemies: ['orc','skeleton','fangbat'],
-    segments: [ { type:'field', len:760, terrain:'stone', enemies:3, pickup:'gold' }, { type:'town', len:520, doors:['shield','armor'] }, { type:'climb', len:480 }, { type:'field', len:640, terrain:'stone', enemies:2, pickup:'buff' }, { type:'bossgate', len:240 } ] },
+    segments: [ { type:'field', biome:'castle_in', len:760, enemies:3, pickup:'gold' }, { type:'town', biome:'castle_in', len:520, doors:['shield','armor'] }, { type:'climb', biome:'castle_in', len:480 }, { type:'field', biome:'castle_in', len:640, enemies:2, pickup:'buff' }, { type:'bossgate', biome:'castle_in', len:240 } ] },
   { name: 'KRAKEN', sky: '#0077cc', boss: 'fly',    hp: 24,  score: 3000,  sword: null,        dir: 'RL',
     enemies: ['jellyfish','crab','octopus'],
-    segments: [ { type:'field', len:820, terrain:'coast', enemies:3, pickup:'gold' }, { type:'town', len:520, doors:['boots','magic'] }, { type:'field', len:820, terrain:'water', enemies:2, pickup:'heart' }, { type:'bossgate', len:240 } ] },
+    segments: [ { type:'field', biome:'beach', len:820, enemies:3, pickup:'gold' }, { type:'town', biome:'island_town', len:520, doors:['boots','magic'] }, { type:'field', biome:'water', len:820, enemies:2, pickup:'heart' }, { type:'bossgate', biome:'water', len:240 } ] },
   { name: 'GIANT KONG', sky: '#338800', boss: 'ground', hp: 64,  score: 3000,  sword: 'great',     dir: 'LR',
     enemies: ['orc','werebat','anaconda'],
     chain: [ { name:'GIANT KONG',   type:'ground', hp:64, score:3000, sword:'great' },
              { name:'VAMPIRE BATS', type:'fly',    hp:16, score:2000, sword:null    } ],
-    segments: [ { type:'town', len:600, doors:['shield','armor','magic'] }, { type:'field', len:1120, terrain:'mountain', enemies:4, pickup:'buff' }, { type:'climb', len:540 }, { type:'bossgate', len:240 } ] },
+    segments: [ { type:'field', biome:'mountain', len:640, enemies:3, pickup:'gold' }, { type:'town', biome:'forest', len:520, doors:['shield','armor','magic'] }, { type:'field', biome:'forest', len:520, enemies:2, pickup:'buff' }, { type:'climb', biome:'cave', len:460 }, { type:'field', biome:'desert', len:540, enemies:2, pickup:'potion' }, { type:'bossgate', biome:'desert', len:240 } ] },
   { name: 'SPHINX', sky: '#aaaa77', boss: 'ground', hp: 84,  score: 3000,  sword: null,        dir: 'LR',
     enemies: ['anaconda','skeleton','wisp'],
-    segments: [ { type:'town', len:580, doors:['shield','armor','magic'] }, { type:'field', len:1140, terrain:'desert', enemies:3, pickup:'potion' }, { type:'climb', len:480 }, { type:'bossgate', len:240 } ] },
-  { name: 'COIN COLLECTOR', sky: '#7a1f1f', boss: 'fly',    hp: 32,  score: 4000,  sword: 'excalibur', dir: 'LR',
+    segments: [ { type:'town', biome:'pyramid', len:580, doors:['shield','armor','magic'] }, { type:'field', biome:'pyramid', len:1140, enemies:3, pickup:'potion' }, { type:'climb', biome:'pyramid', len:480 }, { type:'bossgate', biome:'pyramid', len:240 } ] },
+  { name: 'COIN COLLECTOR', sky: '#2ab0ff', boss: 'fly',    hp: 32,  score: 4000,  sword: 'excalibur', dir: 'LR',
     enemies: ['wisp','wererat','ghost'],
     chain: [ { name:'COIN COLLECTOR', type:'fly',    hp:32, score:4000, sword:'excalibur' },
              { name:'BLUE KNIGHT',    type:'ground', hp:64, score:4000, sword:null        } ],
-    segments: [ { type:'field', len:900, terrain:'lava', enemies:3, pickup:'gold' }, { type:'town', len:520, doors:['armor','magic'] }, { type:'field', len:820, terrain:'lava', enemies:3, pickup:'buff' }, { type:'bossgate', len:240 } ] },
-  { name: 'DEMON', sky: '#2a1f3a', boss: 'ground', hp: 96,  score: 3000,  sword: 'legend',    dir: 'LR',
+    segments: [ { type:'field', biome:'beach', len:820, enemies:3, pickup:'gold' }, { type:'town', biome:'beach', len:520, doors:['armor','magic'] }, { type:'field', biome:'beach', len:820, enemies:3, pickup:'buff' }, { type:'bossgate', biome:'beach', len:240 } ] },
+  { name: 'DEMON', sky: '#7a2012', boss: 'ground', hp: 96,  score: 3000,  sword: 'legend',    dir: 'LR',
     enemies: ['wisp','goblin','werebat'],
     chain: [ { name:'DEMON',      type:'ground', hp:96, score:3000, sword:'legend' },
              { name:'HOB GOBLIN', type:'ground', hp:96, score:4000, sword:null     } ],
-    segments: [ { type:'field', len:1000, terrain:'dungeon', enemies:3, pickup:'heart' }, { type:'town', len:520, doors:['armor','magic'] }, { type:'climb', len:540 }, { type:'bossgate', len:240 } ] },
+    segments: [ { type:'field', biome:'lava', len:760, enemies:3, pickup:'gold' }, { type:'town', biome:'cave', len:480, doors:['armor','magic'] }, { type:'field', biome:'cave', len:440, enemies:2, pickup:'heart' }, { type:'field', biome:'ice_castle', len:520, enemies:2, pickup:'buff' }, { type:'bossgate', biome:'ice_castle', len:240 } ] },
   { name: 'SNOW KONG', sky: '#88ccee', boss: 'ground', hp: 96,  score: 4000,  sword: null,        dir: 'RL',
     enemies: ['snowyeti','yeti','ratmaster'],
-    segments: [ { type:'town', len:560, doors:['armor','magic'] }, { type:'field', len:1240, terrain:'ice', enemies:4, pickup:'buff' }, { type:'climb', len:560 }, { type:'bossgate', len:240 } ] },
+    segments: [ { type:'field', biome:'ice_castle', len:700, enemies:3, pickup:'buff' }, { type:'town', biome:'ice_castle', len:520, doors:['armor','magic'] }, { type:'climb', biome:'ice_castle', len:520 }, { type:'field', biome:'ice_castle', len:640, enemies:2, pickup:'potion' }, { type:'bossgate', biome:'ice_castle', len:240 } ] },
   { name: 'SILVER KNIGHT', sky: '#667088', boss: 'ground', hp: 96,  score: 5000,  sword: null,        dir: 'LR',
     enemies: ['undead','goblin','skeleton'],
-    segments: [ { type:'field', len:1040, terrain:'castle', enemies:3, pickup:'potion' }, { type:'town', len:520, doors:['shield','armor'] }, { type:'climb', len:520 }, { type:'bossgate', len:240 } ] },
+    segments: [ { type:'field', biome:'beach', len:640, enemies:2, pickup:'gold' }, { type:'field', biome:'underwater', len:620, enemies:2, pickup:'heart' }, { type:'field', biome:'cave', len:520, enemies:2, pickup:'potion' }, { type:'town', biome:'castle_out', len:520, doors:['shield','armor'] }, { type:'field', biome:'castle_out', len:520, enemies:2, pickup:'buff' }, { type:'bossgate', biome:'castle_out', len:240 } ] },
   { name: 'MEKA DRAGON', sky: '#000066', boss: 'ground', hp: 256, hp2: 192, score: 30000, sword: null, dir: 'LR', final: true,
     enemies: ['undead','goblin','roper'],
-    segments: [ { type:'field', len:1200, terrain:'castle', enemies:4, pickup:'gold' }, { type:'climb', len:600 }, { type:'field', len:940, terrain:'castle', enemies:3, pickup:'heart' }, { type:'bossgate', len:300 } ] },
+    segments: [ { type:'field', biome:'void_castle', len:1200, enemies:4, pickup:'gold' }, { type:'climb', biome:'void_castle', len:600 }, { type:'field', biome:'void_castle', len:940, enemies:3, pickup:'heart' }, { type:'bossgate', biome:'void_castle', len:300 } ] },
 ];
 
 export function getRound(n) {
@@ -87,8 +93,8 @@ export function buildStage(stageNum) {
   const enemies   = [];
   const doors     = [];
   const pickups   = [];
-  const hazards   = [];     // 특수지형: water(부력·감속)/lava(접촉피해)/spring(도약대). cloud는 발판 플래그
-  const cloudy    = [1, 2, 4, 9].includes(stageNum);  // 하늘빛 라운드 → climb에 구름 발판 + 도약대
+  const hazards   = [];     // 특수지형: water(부력)/deepwater(잠수)/lava(접촉피해)/spring(도약대)
+  const areas     = [];     // 구역 시퀀스 [{x0,x1,biome}] — 배경 밴드 렌더용
 
   // 보스 체인(스탯). 단일 보스 라운드는 1체, 2단 라운드(R2/R5/R7/R8)는 2체.
   // 원작 구조: 검 보스(X-1)는 별도 문/방 → 처치 시 검 드롭. 마지막=스테이지 보스 → 열쇠 드롭.
@@ -108,6 +114,8 @@ export function buildStage(stageNum) {
   const townSpans = [];
   for (const seg of segs) {
     const x0 = cursor, x1 = cursor + seg.len, mid = (x0 + x1) / 2;
+    const biome = seg.biome || 'meadow';
+    areas.push({ x0, x1, biome });            // 마지막 보스문 앞 여유 바닥은 아래에서 연장
 
     if (seg.type === 'town') {
       townSpans.push({ x0, x1 });
@@ -125,17 +133,26 @@ export function buildStage(stageNum) {
         enemies.push(new Enemy(t, ex, ey, { patrolMin: ex - 80, patrolMax: ex + 80 }));
       }
       for (let px = x0 + 140; px < x1 - 140; px += 320) {
-        platforms.push({ x: px, y: GROUND_Y - (70 + (px % 3) * 12), w: 100, h: 16, terrain: seg.terrain });
+        platforms.push({ x: px, y: GROUND_Y - (70 + (px % 3) * 12), w: 100, h: 16, biome });
       }
-      // 특수지형 해저드(원작): 물/늪=감속·부력 / 용암=접촉 피해(앞에 도약대) / 모래=감속
-      if (seg.terrain === 'water' || seg.terrain === 'coast') {
-        const hw = Math.round(Math.min(300, seg.len * 0.36));
-        hazards.push({ kind: 'water', x: Math.round(mid - hw / 2), y: GROUND_Y - 22, w: hw, h: 82 });
-      } else if (seg.terrain === 'lava') {
+      // 특수지형 해저드 — 구역(biome)이 결정한다(biomes.js). lava=접촉피해+도약대 / water=부력 / deepwater=전구간 잠수
+      const hz = biomeHazard(biome);
+      if (hz === 'lava') {
         const lw = Math.round(Math.min(130, seg.len * 0.16));
         const lx = Math.round(x0 + seg.len * 0.46);
         hazards.push({ kind: 'lava',   x: lx,       y: GROUND_Y - 10, w: lw, h: 70 });
         hazards.push({ kind: 'spring', x: lx - 58,  y: GROUND_Y - 14, w: 32, h: 14 });  // 용암 직전 도약대
+      } else if (hz === 'water') {
+        const hw = Math.round(Math.min(300, seg.len * 0.36));
+        hazards.push({ kind: 'water', x: Math.round(mid - hw / 2), y: GROUND_Y - 22, w: hw, h: 82 });
+      } else if (hz === 'deepwater') {
+        hazards.push({ kind: 'water', x: x0, y: 0, w: seg.len, h: GROUND_Y });          // 전 구간 잠수(상시 부력)
+      }
+      // 열린 하늘 구역: 떠다니는 구름 발판 + 닿기 위한 도약대(원작 R1 블록·R4 구름 점프 감각)
+      if (OPEN_SKY.has(biome)) {
+        const cpx = Math.round(x0 + seg.len * 0.55);
+        platforms.push({ x: cpx - 46, y: GROUND_Y - 116, w: 92, h: 14, cloud: true, biome });
+        hazards.push({ kind: 'spring', x: cpx - 120, y: GROUND_Y - 14, w: 32, h: 14 });
       }
       if (seg.pickup) {
         const type = seg.pickup === 'buff' ? buff : seg.pickup;
@@ -145,13 +162,14 @@ export function buildStage(stageNum) {
       }
     } else if (seg.type === 'climb') {
       const steps = seg.steps ?? 4;
+      const open  = OPEN_SKY.has(biome);
       for (let k = 0; k < steps; k++) {
         const px = x0 + seg.len * (k + 0.5) / steps - 50;
-        const plat = { x: px, y: GROUND_Y - 60 - k * 38, w: 92, h: 16 };
-        if (cloudy) plat.cloud = true;          // 구름 발판(아래→위 통과 가능, 시각만 구분; 충돌은 본디 윗면 전용)
+        const plat = { x: px, y: GROUND_Y - 60 - k * 38, w: 92, h: 16, biome };
+        if (open) plat.cloud = true;            // 열린 하늘 climb → 구름 발판(아래→위 통과)
         platforms.push(plat);
       }
-      if (cloudy) hazards.push({ kind: 'spring', x: Math.round(x0 + 30), y: GROUND_Y - 14, w: 32, h: 14 }); // 구름까지 도약
+      if (open) hazards.push({ kind: 'spring', x: Math.round(x0 + 30), y: GROUND_Y - 14, w: 32, h: 14 });
       const t  = eTypes[ei++ % eTypes.length];
       const ey = enemyAirborne(t) ? GROUND_Y - 150 : GROUND_Y - 90;
       enemies.push(new Enemy(t, mid, ey, { patrolMin: mid - 60, patrolMax: mid + 60 }));
@@ -161,6 +179,7 @@ export function buildStage(stageNum) {
     }
     cursor = x1;
   }
+  if (areas.length) areas[areas.length - 1].x1 = groundLen;   // 보스문 앞 여유 바닥까지 구역 연장
 
   // 시설 자동 배치: 병원은 비최종 라운드마다 1개(마지막 마을 끝), 바는 R1·R6(첫 마을 앞)
   if (!round.final && townSpans.length) {
@@ -198,10 +217,10 @@ export function buildStage(stageNum) {
 
   // RL 라운드(R3·R4·R9): 원작은 우→좌 진행. LR로 배치한 뒤 전체 x를 좌우 미러링한다.
   // (플레이어 우측 스폰·카메라/성문 충돌 방향 처리는 game.js에서 dir로 분기.)
-  if (dir === 'RL') _mirrorStageX({ platforms, enemies, doors, pickups, castleGate, gate, hazards }, groundLen);
+  if (dir === 'RL') _mirrorStageX({ platforms, enemies, doors, pickups, castleGate, gate, hazards, areas }, groundLen);
 
   return {
-    platforms, enemies, doors, boss, bossChain, groundLen, gate, castleGate, pickups, bossDoor, dir, hazards,
+    platforms, enemies, doors, boss, bossChain, groundLen, gate, castleGate, pickups, bossDoor, dir, hazards, areas,
     sky: round.sky, roundName: round.name, final: !!round.final,
   };
 }
@@ -215,6 +234,7 @@ function _mirrorStageX(d, len) {
   if (d.castleGate) d.castleGate.x = mx(d.castleGate.x, d.castleGate.w);
   if (d.gate)       d.gate.x       = mx(d.gate.x, d.gate.w);
   for (const h of d.hazards)   h.x = mx(h.x, h.w);
+  for (const a of d.areas) { const nx0 = mx(a.x1, 0), nx1 = mx(a.x0, 0); a.x0 = nx0; a.x1 = nx1; }  // 구역 범위 반전
   for (const e of d.enemies) {
     const nx = mx(e.x, e.w);
     const pmin = mx(e.patrolMax, e.w), pmax = mx(e.patrolMin, e.w);  // 순찰 범위도 반전
@@ -225,7 +245,7 @@ function _mirrorStageX(d, len) {
 
 export function drawStage(ctx, stageData, camX, hasKey) {
   const { platforms, enemies, doors } = stageData;
-  _drawSky(ctx, stageData.sky);
+  drawBiomeBackground(ctx, stageData.areas, camX, Date.now());   // 구역별 하늘+지면 밴드 + 장식
   _drawPlatforms(ctx, platforms, camX);
   _drawHazards(ctx, stageData.hazards, camX);
   _drawDoors(ctx, doors, camX);
@@ -300,34 +320,12 @@ function _drawCastleGate(ctx, g, camX, open) {
   }
 }
 
-function _drawSky(ctx, sky) {
-  ctx.fillStyle = sky || '#0088ff';
-  ctx.fillRect(HUD_W, 0, 528, 360);
-  // 구름
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  for (const [cx, cy] of [[200, 60],[350, 40],[120, 80],[450, 55]]) {
-    _cloud(ctx, HUD_W + cx, cy);
-  }
-}
-
-function _cloud(ctx, x, y) {
-  ctx.fillRect(x, y, 48, 14);
-  ctx.fillRect(x + 8, y - 8, 32, 12);
-}
-
 function _drawPlatforms(ctx, platforms, camX) {
   for (const p of platforms) {
     const sx = p.x - camX + HUD_W;
     if (sx + p.w < HUD_W || sx > 640) continue;
     if (p.isGround) {
-      ctx.fillStyle = '#00aa00';
-      ctx.fillRect(sx, p.y, p.w, 8);
-      ctx.fillStyle = '#885544';
-      ctx.fillRect(sx, p.y + 8, p.w, p.h - 8);
-      ctx.fillStyle = '#aa7766';
-      for (let tx = 0; tx < p.w; tx += 48) {
-        ctx.fillRect(sx + tx, p.y + 10, 40, 4);
-      }
+      continue;                          // 지면은 구역별 배경 밴드(drawBiomeBackground)가 그린다
     } else if (p.cloud) {
       // 구름 발판: 아래에서 위로 통과 가능, 윗면에만 착지(원작 부유 발판)
       const t = Date.now() / 500 + sx * 0.02;
@@ -339,9 +337,10 @@ function _drawPlatforms(ctx, platforms, camX) {
       ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fillRect(sx, p.y, p.w, 6);
       ctx.fillStyle = 'rgba(200,215,235,0.8)'; ctx.fillRect(sx, p.y + 5, p.w, 2);
     } else {
-      ctx.fillStyle = '#774433';
+      const c = platColors(p.biome);     // 구역별 플랫폼 색
+      ctx.fillStyle = c.face;
       ctx.fillRect(sx, p.y, p.w, p.h);
-      ctx.fillStyle = '#996655';
+      ctx.fillStyle = c.top;
       ctx.fillRect(sx, p.y, p.w, 5);
     }
   }

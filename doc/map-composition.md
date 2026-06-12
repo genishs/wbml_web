@@ -40,6 +40,7 @@
 | `pyramid`   | 피라미드 내부| `#8a7a4a`           | 사암 블록  | 상형문자·횃불 | Betty 바 |
 | `lava`      | 화염·용암    | `#7a1f1f` 암적      | 흑암/현무암| 용암 글로우·불씨 | hazard:lava |
 | `dungeon`   | 음습 던전    | `#2a1f3a` 암자      | 젖은 돌    | 쇠창살·이끼·물방울 | |
+| `underwater`| 물속(잠수)   | `#1a4a8a` 심청      | 해저 모래  | 거품·해초·물고기 | 전 구간 헤엄(부력 강) |
 | `ice`       | 빙굴·설원    | `#88ccee` 청백      | 얼음/눈    | 고드름·눈보라 | 미끄럼 후보 |
 | `ice_castle`| 얼음 성     | `#a8d8ee`           | 얼음 벽돌  | 결빙 기둥·서리 | |
 | `void_castle`| 끝없는 성   | `#000066` 흑남      | 검은 석조  | 푸른 횃불·균열 | 미로·최종 |
@@ -57,17 +58,21 @@
 | 2 | LR | `cave`(입구) → `mushroom`(버섯 보상) → `water`(부유 플랫폼) → **boss문** | Vampire(검·숨은방) / Myconid(열쇠) | 버섯 첫·둘째 보상, 편지 시작? |
 | 3 | RL | `castle_in`(복도) → `castle_in`(계단/홀) → **boss문** | Red Knight(열쇠·직접) | RL, 붉은 정령 |
 | 4 | RL | `beach`(돈주머니) → `island_town`(Mary 펍/피리) → `water`+구름·스프링 → **boss문** | Kraken(열쇠) | 편지→피리, 해저 비밀상점(보스후) |
-| 5 | LR | `mountain`(머드맨) → `forest` → `cave`(콩 숨은 입구) → **boss문** | Kong(Great검·숨은방) / Vampire Bats(열쇠,동굴) | ↑ 숨은 입구 |
-| 6 | LR | `desert`(모래) → `pyramid`(Betty 바·유적) → **boss문** | Sphinx(열쇠·퀴즈) | 퀴즈 분기, 바 힌트 |
-| 7 | LR | `lava`(용암밭) → `lava`(용암 위 플랫폼) → `lava` → **boss문** | Coin Collector(Excalibur·숨은방) / Blue Knight(열쇠) | 용암 hazard, 도약대 |
-| 8 | LR | `dungeon`(음습) → `cave`(좁은 길) → `dungeon` → **boss문** | Demon(Legend검·숨은방) / Hob Goblin(열쇠) | 어둠 |
-| 9 | RL | `ice`(빙판·설원) → `cave`(빙굴) → `ice_castle` → **boss문** | Snow Kong(열쇠·직접) | RL, 스노우 예티 졸개 |
-| 10 | LR | `castle_out`(성벽) → `castle_in`(홀·점쟁이) → `castle_in` → **boss문** | Silver Knight(열쇠) | 종/루비 선택 분기 |
-| 11 | LR | `void_castle`(미로) → `void_castle`(보스러시: 기사+블루나이트) → **boss문**(최종) | Meka Dragon 2페이즈 | 미로(종 안내), 루비 효과 |
+| 5 | LR | `mountain`(산지) → `forest`(숲) → `cave`(동굴) → `desert`(동굴 빠져나와 사막) → **boss문** | Kong(Great검·숨은방) / Vampire Bats(열쇠) | ↑ 숨은 입구 |
+| 6 | LR | `pyramid`(피라미드 안에서 시작·Betty 바·유적) → **boss문** → *클리어 시 R7 해변으로 전환* | Sphinx(열쇠·퀴즈) | 퀴즈 분기, 바 힌트 |
+| 7 | LR | `beach`(해변에서 진행) → `beach` → **boss문** | Coin Collector(Excalibur·숨은방) / Blue Knight(열쇠) | 해변 톤 (※용암 아님) |
+| 8 | LR | `lava`(용암 플랫폼에서 시작) → `cave`(동굴) → `ice_castle`(얼음성 입구까지) → **boss문** | Demon(Legend검·숨은방) / Hob Goblin(열쇠) | 용암 hazard·도약대, 얼음성 입구 |
+| 9 | RL | `ice_castle`(얼음성 안에서 계속 진행) → `ice_castle` → **boss문** | Snow Kong(열쇠·직접) | RL, 스노우 예티 졸개 |
+| 10 | LR | `beach`(해변) → `underwater`(물속 잠수) → `cave`(동굴) → `castle_out`(성벽) → **boss문** | Silver Knight(열쇠) | 종/루비 선택, 물속 헤엄 구간 |
+| 11 | LR | `void_castle`(성 미로) → `void_castle`(보스러시: 기사+블루나이트) → **boss문**(최종) | Meka Dragon 2페이즈 | 미로(종 안내), 루비 효과 |
 
-> **R9/R10 진행방향 확정**: 2.0 정본표 = R9 Snow Kong(빙설)·R10 Silver Knight(성).
-> 위키의 "빙굴 우→좌"는 Snow Kong 라운드 = **R9** → 우리 `dir`(RL=R3·R4·R9)가 정본표와 일치.
-> **R10 = LR 유지.** (이전 R10-RL 후보는 구버전 prose 기준이라 폐기.)
+> **사용자 확정 구역 구성(2026-06-13)**: 위 R5~R11은 사용자가 직접 지정한 원작 구역 흐름이다.
+> 핵심 정정: **R6=피라미드 내부 시작**, **R7=해변(용암 아님)**, **R8=용암→동굴→얼음성 입구**,
+> **R9=얼음성 내부 전 구간**, **R10=해변→물속→동굴→성벽**. 보스 라인업(2.0표)은 불변 — 지형만 교체.
+> **구역 간 연속성**: R6 보스 클리어 → R7 해변, R8 끝(얼음성 입구) → R9 얼음성 내부처럼
+> 인접 라운드의 시작/끝 구역이 이어진다(클리어 연출에서 다음 구역 암시 — 후속 폴리시).
+>
+> **R9/R10 진행방향 확정**: 정본표 = R9 Snow Kong(빙설)·R10 Silver Knight(성). `dir`(RL=R3·R4·R9) 정합, **R10=LR 유지.**
 
 ---
 
