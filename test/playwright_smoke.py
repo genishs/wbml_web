@@ -208,7 +208,8 @@ def run(page):
     b10 = biomes_of(10)
     check('R10 구역 시퀀스(해변→물속→동굴→성벽)', set(['beach','underwater','cave','castle_out']).issubset(set(b10)), '>'.join(b10))
     # 구역 경계가 화면에 보이도록 카메라를 중반으로 옮겨 스샷(시각 검토용)
-    for n, tag in [(5, 'r5_mountain_forest'), (8, 'r8_lava_cave'), (10, 'r10_beach_underwater')]:
+    for n, tag in [(5, 'r5_mountain_forest'), (8, 'r8_lava_cave'), (10, 'r10_beach_underwater'),
+                   (4, 'r4_beach'), (9, 'r9_ice_castle'), (11, 'r11_void')]:
         page.evaluate(f"() => {{ const g=window.__game; g._loadStage({n}); const s=g.stageData; const mid=s.areas[1]? s.areas[1].x1 : 600; g.player.x=mid; g.camX=Math.max(0,Math.min(mid-260, s.groundLen-528)); }}")
         time.sleep(0.1)
         page.screenshot(path=str(SHOTS / f'{tag}.png'))
