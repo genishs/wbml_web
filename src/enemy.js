@@ -1,5 +1,5 @@
 import { GRAVITY, HUD_W } from './constants.js';
-import { drawEnemySprite } from './sprites.js';
+import { drawEnemySprite, drawBossSprite } from './sprites.js';
 
 // 일반몹 전체 로스터 (웹 자료 기준 명칭/HP). 정통 색: 빨강↔파랑 등 변종 구분.
 //  family = 렌더 외형군 / move = 거동 / shot = 원거리 투사체(있으면 방패로 경감되는 'projectile')
@@ -197,6 +197,7 @@ export class Boss extends Enemy {
     Object.assign(this, d);
     this.type        = 'boss:' + type;
     this.bossType    = type;
+    this.sprite      = opts.sprite || null;   // 보스 고유 스프라이트 키(없으면 일반 fly/ground 외형)
     this.isBoss      = true;
     this.name  = opts.name ?? 'BOSS';
     this.hp    = opts.hp ?? 20;  this.maxHp = this.hp;
@@ -257,7 +258,10 @@ export class Boss extends Enemy {
     ctx.translate(sx, sy);
     if (this.facing === 1) { ctx.translate(w, 0); ctx.scale(-1, 1); }
 
-    if (this.flies) {
+    const drawn = this.sprite && drawBossSprite(ctx, { sprite: this.sprite, w, h, t: this.tick });
+    if (drawn) {
+      // 고유 스프라이트 사용
+    } else if (this.flies) {
       ctx.fillStyle = this.color;
       ctx.fillRect(w * 0.2, h * 0.15, w * 0.6, h * 0.7);
       ctx.beginPath();

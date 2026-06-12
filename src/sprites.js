@@ -296,3 +296,163 @@ const ENEMY_FAMILY = {
     eyes(ctx, w * 0.4, h * 0.52, w * 0.18);
   },
 };
+
+// ── 보스 고유 스프라이트 (라운드 가디언별 개별 디자인) ────────────────────────
+// ctx는 보스 히트박스 좌상단(0,0)으로 translate + facing 반전까지 끝난 상태로 들어온다.
+// 각 보스는 자체 팔레트를 가진다(같은 fly/ground라도 외형이 완전히 다르게).
+export function drawBossSprite(ctx, { sprite, w, h, t }) {
+  const fn = BOSS_SPRITE[sprite];
+  if (!fn) return false;
+  ctx.save(); ctx.imageSmoothingEnabled = false;
+  fn(ctx, w, h, t || 0);
+  ctx.restore();
+  return true;
+}
+
+function tri(ctx, x1, y1, x2, y2, x3, y3) {
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y3); ctx.closePath(); ctx.fill();
+}
+function bossEyes(ctx, x, y, gap, color = '#ff2020', sz = 4) {
+  ctx.fillStyle = color; fr(ctx, x, y, sz, sz); fr(ctx, x + gap, y, sz, sz);
+}
+
+const BOSS_SPRITE = {
+  // R1 — 사신(낫). 검은 후드 로브 + 해골 + 큰 낫
+  death(ctx, w, h, t) {
+    ctx.fillStyle = '#10101a'; tri(ctx, w * 0.5, 0, w * 0.05, h, w * 0.95, h);        // 로브
+    ctx.fillStyle = '#1c1c2c'; fr(ctx, w * 0.2, h * 0.5, w * 0.6, h * 0.5);
+    ctx.fillStyle = '#0a0a12'; ctx.beginPath(); ctx.arc(w * 0.5, h * 0.3, w * 0.22, Math.PI, 0); ctx.fill(); // 후드 그늘
+    ctx.fillStyle = '#e8e4d4'; fr(ctx, w * 0.36, h * 0.22, w * 0.28, h * 0.2);        // 해골
+    ctx.fillStyle = '#0a0a12'; fr(ctx, w * 0.4, h * 0.27, 5, 5); fr(ctx, w * 0.54, h * 0.27, 5, 5);
+    ctx.fillStyle = '#7a6a3a'; fr(ctx, w * 0.86, -h * 0.1, 3, h * 1.0);               // 낫 자루
+    ctx.fillStyle = '#cfd6e0'; ctx.beginPath(); ctx.moveTo(w * 0.88, -h * 0.1);
+    ctx.quadraticCurveTo(w * 1.25, h * 0.0, w * 1.0, h * 0.32); ctx.lineTo(w * 0.86, h * 0.12); ctx.closePath(); ctx.fill();
+  },
+  // R2-1 — 킹 뱀파이어. 붉은 안감 망토 + 창백한 얼굴 + 송곳니
+  vampire(ctx, w, h) {
+    ctx.fillStyle = '#7a1020'; tri(ctx, w * 0.5, h * 0.3, -w * 0.1, h * 0.95, w * 0.5, h);  // 망토 좌
+    ctx.fillStyle = '#5a0c18'; tri(ctx, w * 0.5, h * 0.3, w * 1.1, h * 0.95, w * 0.5, h);   // 망토 우
+    ctx.fillStyle = '#1a1018'; fr(ctx, w * 0.3, h * 0.3, w * 0.4, h * 0.6);                 // 정장
+    ctx.fillStyle = '#e8dcd0'; fr(ctx, w * 0.36, h * 0.08, w * 0.28, h * 0.26);             // 얼굴
+    ctx.fillStyle = '#1a1018'; fr(ctx, w * 0.34, h * 0.04, w * 0.32, h * 0.08);             // 머리
+    bossEyes(ctx, w * 0.4, h * 0.16, w * 0.16, '#ff2020', 4);
+    ctx.fillStyle = '#ffffff'; fr(ctx, w * 0.42, h * 0.28, 2, 4); fr(ctx, w * 0.54, h * 0.28, 2, 4); // 송곳니
+  },
+  // R2-2 — 마이코니드 마스터. 거대 붉은 갓 + 점박이 + 줄기 몸
+  myconid(ctx, w, h) {
+    ctx.fillStyle = '#e8e0d0'; fr(ctx, w * 0.3, h * 0.5, w * 0.4, h * 0.5);                 // 줄기
+    ctx.fillStyle = '#c02828'; ctx.beginPath(); ctx.arc(w * 0.5, h * 0.5, w * 0.5, Math.PI, 0); ctx.fill(); // 갓
+    ctx.fillStyle = '#ffffff'; fr(ctx, w * 0.2, h * 0.34, 6, 6); fr(ctx, w * 0.5, h * 0.24, 7, 7); fr(ctx, w * 0.72, h * 0.36, 5, 5);
+    bossEyes(ctx, w * 0.38, h * 0.62, w * 0.18, '#000000', 4);
+    ctx.fillStyle = '#000000'; fr(ctx, w * 0.44, h * 0.78, w * 0.12, 3);                    // 입
+  },
+  // R3 — 레드 나이트. 붉은 판금 + 깃털 투구 + 검·방패
+  redknight(ctx, w, h) { knight(ctx, w, h, '#cc2a2a', '#8a1818', '#ff6a3a'); },
+  // R7-2 — 블루 나이트
+  blueknight(ctx, w, h) { knight(ctx, w, h, '#3a66cc', '#22408a', '#7aa8ff'); },
+  // R10 — 실버 나이트
+  silverknight(ctx, w, h) { knight(ctx, w, h, '#b8c0cc', '#7a8290', '#eef4fb'); },
+  // R4 — 크라켄. 둥근 머리 + 큰 눈 + 흐느적 촉수
+  kraken(ctx, w, h, t) {
+    ctx.fillStyle = '#7a3aa0'; ctx.beginPath(); ctx.arc(w * 0.5, h * 0.34, w * 0.42, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5a2a80';                                                              // 촉수
+    for (let i = 0; i < 5; i++) { const wig = Math.sin(t * 0.12 + i) * 4;
+      fr(ctx, w * (0.12 + i * 0.18) + wig, h * 0.5, 5, h * (0.4 + (i % 2) * 0.14)); }
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(w * 0.36, h * 0.32, 6, 0, 7); ctx.arc(w * 0.64, h * 0.32, 6, 0, 7); ctx.fill();
+    ctx.fillStyle = '#101018'; fr(ctx, w * 0.34, h * 0.3, 4, 4); fr(ctx, w * 0.62, h * 0.3, 4, 4);
+    ctx.fillStyle = '#3a1a55'; tri(ctx, w * 0.42, h * 0.46, w * 0.58, h * 0.46, w * 0.5, h * 0.56); // 부리
+  },
+  // R5-1 — 자이언트 콩. 갈색 거대 유인원 + 가슴
+  kong(ctx, w, h) { ape(ctx, w, h, '#6a4a2a', '#4a3018', '#caa078'); },
+  // R9 — 스노우 콩. 흰/빙 유인원
+  snowkong(ctx, w, h) { ape(ctx, w, h, '#dfeaf2', '#9ec0d4', '#bfe0ef'); },
+  // R5-2 — 뱀파이어 박쥐. 큰 박쥐 + 송곳니 + 펼친 날개
+  vampirebats(ctx, w, h, t) {
+    const flap = Math.sin(t * 0.2) * h * 0.06;
+    ctx.fillStyle = '#3a2a55';
+    tri(ctx, w * 0.4, h * 0.5, -w * 0.05, h * 0.3 + flap, w * 0.2, h * 0.8);                // 좌 날개
+    tri(ctx, w * 0.6, h * 0.5, w * 1.05, h * 0.3 + flap, w * 0.8, h * 0.8);                 // 우 날개
+    ctx.fillStyle = '#22182f'; fr(ctx, w * 0.36, h * 0.36, w * 0.28, h * 0.4);              // 몸통
+    ctx.fillStyle = '#22182f'; tri(ctx, w * 0.4, h * 0.28, w * 0.46, h * 0.16, w * 0.5, h * 0.3); tri(ctx, w * 0.6, h * 0.28, w * 0.54, h * 0.16, w * 0.5, h * 0.3); // 귀
+    bossEyes(ctx, w * 0.42, h * 0.42, w * 0.1, '#ffcc00', 4);
+    ctx.fillStyle = '#ffffff'; fr(ctx, w * 0.44, h * 0.54, 2, 4); fr(ctx, w * 0.54, h * 0.54, 2, 4);
+  },
+  // R6 — 스핑크스. 사자 몸 + 파라오 두건(금/청 줄) + 사람 얼굴
+  sphinx(ctx, w, h) {
+    ctx.fillStyle = '#d8b46a'; fr(ctx, w * 0.1, h * 0.55, w * 0.85, h * 0.4);               // 사자 몸
+    fr(ctx, w * 0.08, h * 0.78, w * 0.12, h * 0.22); fr(ctx, w * 0.8, h * 0.78, w * 0.12, h * 0.22); // 앞발
+    ctx.fillStyle = '#e8c87a'; fr(ctx, w * 0.3, h * 0.2, w * 0.4, h * 0.4);                 // 얼굴
+    ctx.fillStyle = '#caa24a'; fr(ctx, w * 0.24, h * 0.12, w * 0.52, h * 0.16);             // 두건 상단
+    ctx.fillStyle = '#2a5aa0'; fr(ctx, w * 0.24, h * 0.28, w * 0.1, h * 0.3); fr(ctx, w * 0.66, h * 0.28, w * 0.1, h * 0.3); // 두건 옆 청줄
+    bossEyes(ctx, w * 0.38, h * 0.34, w * 0.16, '#101018', 4);
+    ctx.fillStyle = '#caa24a'; fr(ctx, w * 0.44, h * 0.46, w * 0.12, 4);                    // 입
+  },
+  // R7-1 — 코인 컬렉터(가난귀신). 굽은 탐욕 영혼 + 돈자루 + 동전 반짝
+  coincollector(ctx, w, h, t) {
+    ctx.fillStyle = '#3a4a2a'; ctx.beginPath(); ctx.arc(w * 0.5, h * 0.4, w * 0.4, Math.PI, 0); ctx.fill(); // 두건
+    ctx.fillStyle = '#2a361e'; fr(ctx, w * 0.2, h * 0.4, w * 0.6, h * 0.55);                // 망토
+    ctx.fillStyle = '#b8a070'; fr(ctx, w * 0.38, h * 0.28, w * 0.24, h * 0.2);              // 야윈 얼굴
+    bossEyes(ctx, w * 0.42, h * 0.34, w * 0.12, '#ffdd33', 4);
+    ctx.fillStyle = '#8a6a30'; ctx.beginPath(); ctx.arc(w * 0.78, h * 0.7, w * 0.18, 0, Math.PI * 2); ctx.fill(); // 돈자루
+    ctx.fillStyle = '#ffd040'; const ph = (t * 0.1) % 6; fr(ctx, w * 0.74, h * 0.5 - ph * 2, 4, 4); fr(ctx, w * 0.84, h * 0.55 - ph, 3, 3); // 동전
+  },
+  // R8-1 — 데몬. 큰 뿔 + 날개 + 발광 눈 + 불덩이
+  demon(ctx, w, h, t) {
+    ctx.fillStyle = '#3a1228'; tri(ctx, w * 0.3, h * 0.4, -w * 0.1, h * 0.2, w * 0.25, h * 0.7); // 날개
+    ctx.fillStyle = '#3a1228'; tri(ctx, w * 0.7, h * 0.4, w * 1.1, h * 0.2, w * 0.75, h * 0.7);
+    ctx.fillStyle = '#7a1a20'; fr(ctx, w * 0.26, h * 0.3, w * 0.48, h * 0.6);               // 몸
+    ctx.fillStyle = '#9a2a28'; fr(ctx, w * 0.32, h * 0.08, w * 0.36, h * 0.28);             // 머리
+    ctx.fillStyle = '#e8d0b0'; tri(ctx, w * 0.32, h * 0.1, w * 0.18, h * -0.06, w * 0.4, h * 0.06); tri(ctx, w * 0.68, h * 0.1, w * 0.82, h * -0.06, w * 0.6, h * 0.06); // 뿔
+    bossEyes(ctx, w * 0.38, h * 0.16, w * 0.16, '#ffcc00', 5);
+    const fl = 0.5 + Math.sin(t * 0.2) * 0.3;                                               // 불덩이
+    ctx.fillStyle = `rgba(255,${120 + fl * 100 | 0},20,0.9)`; ctx.beginPath(); ctx.arc(w * 0.85, h * 0.6, w * 0.16, 0, Math.PI * 2); ctx.fill();
+  },
+  // R8-2 — 호브 고블린. 초록 + 큰 귀 + 에너지 검
+  hobgoblin(ctx, w, h) {
+    ctx.fillStyle = '#3a7a2a'; fr(ctx, w * 0.28, h * 0.34, w * 0.44, h * 0.5);              // 몸
+    ctx.fillStyle = '#4a9a36'; fr(ctx, w * 0.34, h * 0.1, w * 0.32, h * 0.28);              // 머리
+    ctx.fillStyle = '#3a7a2a'; tri(ctx, w * 0.34, h * 0.18, w * 0.12, h * 0.1, w * 0.34, h * 0.32); tri(ctx, w * 0.66, h * 0.18, w * 0.88, h * 0.1, w * 0.66, h * 0.32); // 귀
+    bossEyes(ctx, w * 0.4, h * 0.2, w * 0.14, '#ff3020', 4);
+    ctx.fillStyle = '#cfd6e0'; fr(ctx, w * 0.82, h * 0.0, 4, h * 0.7);                       // 검
+    ctx.fillStyle = 'rgba(120,255,180,0.6)'; fr(ctx, w * 0.8, h * 0.0, 8, h * 0.7);          // 에너지광
+    ctx.fillStyle = '#7a4a20'; fr(ctx, w * 0.78, h * 0.68, w * 0.16, 5);
+  },
+  // R11 — 메카 드래곤. 금속 머리·이빨 + 발광 눈 + 판금 + 날개
+  mekadragon(ctx, w, h, t) {
+    ctx.fillStyle = '#3a4a3a'; tri(ctx, w * 0.5, h * 0.4, w * 1.1, h * 0.1, w * 0.6, h * 0.7); // 날개
+    ctx.fillStyle = '#5a6a5a'; fr(ctx, w * 0.2, h * 0.4, w * 0.5, h * 0.5);                  // 몸 판금
+    ctx.fillStyle = '#6a7a6a'; for (let i = 0; i < 3; i++) fr(ctx, w * (0.24 + i * 0.14), h * 0.42, w * 0.1, h * 0.46); // 판금 줄
+    ctx.fillStyle = '#4a5a4a'; fr(ctx, w * 0.5, h * 0.08, w * 0.5, h * 0.3);                 // 머리(주둥이)
+    ctx.fillStyle = '#cfd6e0'; for (let i = 0; i < 4; i++) tri(ctx, w * (0.56 + i * 0.1), h * 0.38, w * (0.6 + i * 0.1), h * 0.38, w * (0.58 + i * 0.1), h * 0.46); // 이빨
+    const g = 0.5 + Math.sin(t * 0.25) * 0.4;
+    ctx.fillStyle = `rgba(255,40,40,${0.6 + g * 0.4})`; fr(ctx, w * 0.66, h * 0.16, 6, 6);    // 발광 눈
+    ctx.fillStyle = '#202820'; fr(ctx, w * 0.5, h * 0.2, w * 0.06, h * 0.06);                // 콧구멍
+  },
+};
+
+// 공용: 기사형(색만 다름) — 판금 갑옷 + 깃털 투구 + 검·방패
+function knight(ctx, w, h, body, dark, plume) {
+  ctx.fillStyle = dark; fr(ctx, w * 0.28, h * 0.66, w * 0.16, h * 0.34); fr(ctx, w * 0.56, h * 0.66, w * 0.16, h * 0.34); // 다리
+  ctx.fillStyle = body; fr(ctx, w * 0.22, h * 0.3, w * 0.56, h * 0.42);                    // 몸통
+  ctx.fillStyle = dark; fr(ctx, w * 0.22, h * 0.3, w * 0.56, 4);
+  ctx.fillStyle = body; fr(ctx, w * 0.34, h * 0.08, w * 0.32, h * 0.26);                   // 투구
+  ctx.fillStyle = '#101018'; fr(ctx, w * 0.38, h * 0.16, w * 0.24, h * 0.08);              // 면갑 틈
+  ctx.fillStyle = '#ff2020'; fr(ctx, w * 0.4, h * 0.18, 4, 3); fr(ctx, w * 0.56, h * 0.18, 4, 3);
+  ctx.fillStyle = plume; fr(ctx, w * 0.46, h * -0.04, w * 0.08, h * 0.16);                 // 깃털
+  ctx.fillStyle = '#cfd6e0'; fr(ctx, w * 0.84, h * 0.06, 4, h * 0.6);                       // 검
+  ctx.fillStyle = '#ffcc00'; fr(ctx, w * 0.8, h * 0.6, w * 0.14, 4);
+  ctx.fillStyle = dark; fr(ctx, w * 0.06, h * 0.36, w * 0.16, h * 0.3);                     // 방패
+  ctx.fillStyle = body; fr(ctx, w * 0.09, h * 0.4, w * 0.1, h * 0.22);
+}
+
+// 공용: 유인원형(콩/스노우콩) — 색만 다름
+function ape(ctx, w, h, fur, dark, face) {
+  ctx.fillStyle = dark; fr(ctx, w * 0.22, h * 0.7, w * 0.2, h * 0.3); fr(ctx, w * 0.58, h * 0.7, w * 0.2, h * 0.3); // 다리
+  ctx.fillStyle = fur; fr(ctx, w * 0.1, h * 0.28, w * 0.8, h * 0.48);                       // 몸통(넓은 어깨)
+  ctx.fillStyle = dark; fr(ctx, -w * 0.02, h * 0.32, w * 0.18, h * 0.44); fr(ctx, w * 0.84, h * 0.32, w * 0.18, h * 0.44); // 팔
+  ctx.fillStyle = fur; fr(ctx, w * 0.3, h * 0.04, w * 0.4, h * 0.3);                        // 머리
+  ctx.fillStyle = face; fr(ctx, w * 0.36, h * 0.12, w * 0.28, h * 0.2);                     // 얼굴
+  bossEyes(ctx, w * 0.4, h * 0.16, w * 0.16, '#101018', 4);
+  ctx.fillStyle = '#101018'; fr(ctx, w * 0.44, h * 0.26, w * 0.12, 3);                      // 콧등
+  ctx.fillStyle = face; fr(ctx, w * 0.34, h * 0.5, w * 0.32, h * 0.16);                     // 가슴
+}
