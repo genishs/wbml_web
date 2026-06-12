@@ -1,0 +1,105 @@
+# 맵 구성 — 구역(biome) 시퀀스 설계 (우리 전용 맵의 틀)
+
+> **목적**: 라운드 = "한 지형 한 방향"으로 납작하게 짜인 현재 `ROUNDS[].segments`를,
+> 원작처럼 **여러 구역을 거쳐 가는 진행(biome transition)** 으로 끌어올린다.
+> 예: 해변에서 시작 → 동굴 진입 → 얼음성으로 나감.
+>
+> **저작권 경계(불변)**: 원작 레벨 바이너리(타일맵 좌표)·그래픽 타일은 **가져오지 않는다.**
+> 여기서 참고하는 것은 **구역의 흐름·순서**(공개 공략/위키로 학습 가능한 사실)뿐이며,
+> 좌표·배치·아트는 **전부 우리가 직접 작성**한다. 즉 "원작 맵 복제"가 아니라
+> "원작 진행 구조를 참고한 **우리 전용 맵**"이다. (cf. doc/stage-design.md 2장 prose가 1차 근거)
+
+---
+
+## 0. 작업 순서 (사용자 합의)
+
+1. **틀**: biome 데이터 모델 + 구역별 렌더러(하늘/지면/플랫폼/장식 테마). ← 본 문서가 정의
+2. **맵**: 라운드별 구역 시퀀스를 우리 좌표로 배치(아래 2장 표 → `ROUNDS[].areas[]`).
+3. **그림**: 구역별 절차적 아트(배경·타일·장식)를 design-publisher가 입힌다.
+
+---
+
+## 1. Biome 카탈로그 (구역 시각 정체성)
+
+각 biome = `{ sky, ground, platform, decor }` 테마. 한 라운드는 2~4개 biome을 거친다.
+
+| key | 한글 | sky(권장) | 지면/플랫폼 | 장식(decor) | 비고 |
+|-----|------|-----------|-------------|-------------|------|
+| `village`   | 마을 입구    | `#0088ff` 맑은 하늘 | 초원 녹/흙 | 집·울타리·간판 | 상점 밀집 |
+| `meadow`    | 들판 초원    | `#0088ff`           | 초원 녹/흙 | 덤불·꽃·작은 단차 | |
+| `cave`      | 동굴        | `#1a1622` 암흑      | 암회 바위  | 종유석·횃불 | 어두움 |
+| `mushroom`  | 버섯 숲     | `#1f6a3a` 짙은 녹   | 흙/이끼    | 거대 버섯·포자 | 물 인접 |
+| `water`     | 물 위 구간   | (인접 biome 하늘)   | 부유 플랫폼 | 수면·물보라 | hazard:water |
+| `castle_in` | 성 내부 복도 | `#44506a` 회청      | 석조 바닥  | 기둥·창·휘장 | RL 흔함 |
+| `castle_out`| 성 외벽     | `#667088`           | 성벽 돌    | 흉벽·깃발 | |
+| `beach`     | 해안·야자수  | `#0077cc` 바다+하늘 | 모래/판자  | 야자수·파도 | |
+| `island_town`| 섬 마을    | `#0077cc`           | 판자/모래  | 펍 창문(Mary)·등대 | 편지퀘 |
+| `mountain`  | 산악        | `#5a7a6a`           | 갈회 바위  | 봉우리·낙석 | |
+| `forest`    | 숲          | `#338800`           | 흙/뿌리    | 큰 나무·그늘 | |
+| `desert`    | 사막        | `#aaaa77` 황톳빛    | 모래언덕   | 선인장·뼈·모래바람 | hazard 후보:모래 |
+| `pyramid`   | 피라미드 내부| `#8a7a4a`           | 사암 블록  | 상형문자·횃불 | Betty 바 |
+| `lava`      | 화염·용암    | `#7a1f1f` 암적      | 흑암/현무암| 용암 글로우·불씨 | hazard:lava |
+| `dungeon`   | 음습 던전    | `#2a1f3a` 암자      | 젖은 돌    | 쇠창살·이끼·물방울 | |
+| `ice`       | 빙굴·설원    | `#88ccee` 청백      | 얼음/눈    | 고드름·눈보라 | 미끄럼 후보 |
+| `ice_castle`| 얼음 성     | `#a8d8ee`           | 얼음 벽돌  | 결빙 기둥·서리 | |
+| `void_castle`| 끝없는 성   | `#000066` 흑남      | 검은 석조  | 푸른 횃불·균열 | 미로·최종 |
+
+---
+
+## 2. 라운드별 구역 시퀀스 (우리 전용 맵 틀)
+
+표기: `[방향]` · `구역A → 구역B → …(boss문)`. 보스/2단/숨은요소는 stage-design 2.0표 기준.
+검 보스(X-1)는 중반 **숨은 문(별도 방)**, 스테이지 보스(X-2/단일)는 **boss문**.
+
+| R | 방향 | 구역 시퀀스 (biome 전환) | 보스(방) | 특수/숨은 |
+|---|------|--------------------------|----------|-----------|
+| 1 | LR | `village`(상점·NPC검) → `meadow`(뱀·코브라) → `cave`(동굴 입구, 단차/블록) → **boss문** | Death(열쇠) | 첫 검 NPC, 모래시계 |
+| 2 | LR | `cave`(입구) → `mushroom`(버섯 보상) → `water`(부유 플랫폼) → **boss문** | Vampire(검·숨은방) / Myconid(열쇠) | 버섯 첫·둘째 보상, 편지 시작? |
+| 3 | RL | `castle_in`(복도) → `castle_in`(계단/홀) → **boss문** | Red Knight(열쇠·직접) | RL, 붉은 정령 |
+| 4 | RL | `beach`(돈주머니) → `island_town`(Mary 펍/피리) → `water`+구름·스프링 → **boss문** | Kraken(열쇠) | 편지→피리, 해저 비밀상점(보스후) |
+| 5 | LR | `mountain`(머드맨) → `forest` → `cave`(콩 숨은 입구) → **boss문** | Kong(Great검·숨은방) / Vampire Bats(열쇠,동굴) | ↑ 숨은 입구 |
+| 6 | LR | `desert`(모래) → `pyramid`(Betty 바·유적) → **boss문** | Sphinx(열쇠·퀴즈) | 퀴즈 분기, 바 힌트 |
+| 7 | LR | `lava`(용암밭) → `lava`(용암 위 플랫폼) → `lava` → **boss문** | Coin Collector(Excalibur·숨은방) / Blue Knight(열쇠) | 용암 hazard, 도약대 |
+| 8 | LR | `dungeon`(음습) → `cave`(좁은 길) → `dungeon` → **boss문** | Demon(Legend검·숨은방) / Hob Goblin(열쇠) | 어둠 |
+| 9 | RL | `ice`(빙판·설원) → `cave`(빙굴) → `ice_castle` → **boss문** | Snow Kong(열쇠·직접) | RL, 스노우 예티 졸개 |
+| 10 | LR | `castle_out`(성벽) → `castle_in`(홀·점쟁이) → `castle_in` → **boss문** | Silver Knight(열쇠) | 종/루비 선택 분기 |
+| 11 | LR | `void_castle`(미로) → `void_castle`(보스러시: 기사+블루나이트) → **boss문**(최종) | Meka Dragon 2페이즈 | 미로(종 안내), 루비 효과 |
+
+> **R9/R10 진행방향 확정**: 2.0 정본표 = R9 Snow Kong(빙설)·R10 Silver Knight(성).
+> 위키의 "빙굴 우→좌"는 Snow Kong 라운드 = **R9** → 우리 `dir`(RL=R3·R4·R9)가 정본표와 일치.
+> **R10 = LR 유지.** (이전 R10-RL 후보는 구버전 prose 기준이라 폐기.)
+
+---
+
+## 3. 데이터 모델 변경 제안 (구현 틀)
+
+현재: `ROUNDS[].segments[] = { type:'town|field|climb|bossgate', terrain, len, ... }`
+(terrain은 장식 문자열, 렌더 미반영)
+
+제안: 각 세그먼트에 **`biome`** 부여 + 렌더러가 biome 테마로 그림.
+```
+segments: [
+  { type:'town',  biome:'village', len:560, doors:[...] },
+  { type:'field', biome:'meadow',  len:720, enemies:3, pickup:'buff' },
+  { type:'field', biome:'cave',    len:560, enemies:2, hazard:'none' },
+  { type:'bossgate', biome:'cave', len:240 },
+]
+```
+- `buildStage`: 세그먼트별 `biome` → `areas[]`(x범위+biome) 산출해 반환.
+- `drawStage`: 단일 sky/지면 대신 **구역별 배경 밴드**(하늘 그라데이션·지면 틴트·장식)로 렌더.
+- 카메라 위치에 따라 현재/인접 구역이 자연스럽게 전환(경계 블렌딩 또는 하드 컷).
+- hazard(#6)는 biome에 종속: lava→lava, water/beach→water, ice→미끄럼(후속).
+
+> 구현은 **렌더러(틀)** 먼저 → 라운드 데이터 이식 → 구역별 아트 순. 병렬 분기 가능 지점은 4장.
+
+---
+
+## 4. 병렬 작업 분기 (브랜치 쪼개기 → SCM 통합)
+
+| 브랜치 | 범위 | 의존 |
+|--------|------|------|
+| `feat/map-biomes` | biome 모델 + 구역별 렌더러 틀 + 데이터 이식 | feat/direction(지형 #6) |
+| `feat/art-*` | biome별 절차적 아트(배경/타일/장식) — 구역 단위로 분할 가능 | map-biomes |
+| `feat/quest-*` | ⑦스핑크스 ⑧미로·2페이즈 ⑨종·루비 ⑩편지·피리 | map-biomes 일부 |
+
+→ 각자 독립 진행 후 **scm-manager가 develop/main으로 통합**(충돌 정리 포함). 형상관리 책임 분리.
